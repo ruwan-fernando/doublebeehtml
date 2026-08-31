@@ -1,0 +1,2853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>doubleBee — Bag Business Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #F2F4F7;
+    --bg-raised: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-2: #EAF1FB;
+    --border: #DCE3EC;
+    --border-soft: #E7ECF2;
+    --text: #1E2733;
+    --text-dim: #57626F;
+    --text-faint: #8B96A3;
+    --accent: #2E6FE0;
+    --accent-dim: #6C9CF0;
+    --stitch: #C9D8EC;
+    --good: #2F8F5B;
+    --good-bg: #E3F4EA;
+    --bad: #D14343;
+    --bad-bg: #FBE7E7;
+    --radius: 10px;
+    --radius-sm: 6px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{ box-sizing: border-box; -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  html,body{ margin:0; padding:0; background: var(--bg); color: var(--text); overflow-x:hidden; width:100%; }
+  body{ min-height:100vh; min-height:100dvh; -webkit-tap-highlight-color: transparent; }
+  h1,h2,h3,h4{ font-family:'Fraunces', serif; font-weight:600; margin:0; letter-spacing:-0.01em; }
+  button{ font-family:inherit; }
+  input, select, textarea{ font-family:'Inter', sans-serif; }
+  ::selection{ background: var(--accent-dim); color: var(--text); }
+
+  a{ color: var(--accent); }
+
+  /* ---------- Shell layout ---------- */
+  #app{ display:flex; min-height:100vh; }
+
+  .sidebar{
+    width: 226px; flex-shrink:0; background: var(--bg-raised);
+    border-right: 1px solid var(--border-soft);
+    padding: 22px 14px; display:flex; flex-direction:column; gap:4px;
+    position: sticky; top:0; height:100vh;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; padding: 4px 10px 22px 10px; }
+  .brand-mark{ width:30px; height:30px; flex-shrink:0; }
+  .brand-text h1{ font-size:19px; color:var(--text); line-height:1.1; }
+  .brand-text span{ font-size:11px; color: var(--text-faint); letter-spacing:0.02em; }
+
+  .nav-btn{
+    display:flex; align-items:center; gap:11px; width:100%; text-align:left;
+    padding:10px 12px; border-radius: var(--radius-sm); border:none; background:transparent;
+    color: var(--text-dim); font-size:14px; cursor:pointer; transition: background .12s ease, color .12s ease;
+  }
+  .nav-btn svg{ width:17px; height:17px; flex-shrink:0; opacity:.85; }
+  .nav-btn:hover{ background: var(--surface); color: var(--text); }
+  .nav-btn.active{ background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+
+  .sidebar-foot{ margin-top:auto; padding: 10px; font-size:11px; color: var(--text-faint); line-height:1.5; }
+
+  .main{ flex:1; min-width:0; padding: 26px 30px 90px 30px; }
+  .topline{ display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:22px; }
+  .topline h2{ font-size:26px; }
+  .topline p{ margin:4px 0 0 0; color: var(--text-faint); font-size:13px; }
+
+  .mobile-topbar{ display:none; }
+
+  /* ---------- Cards / grid ---------- */
+  .grid{ display:grid; gap:14px; }
+  .kpi-grid{ grid-template-columns: repeat(4, 1fr); margin-bottom: 22px; }
+  .card{
+    background: var(--surface); border:1px solid var(--border-soft); border-radius: var(--radius);
+    padding: 18px;
+  }
+  .kpi-card{ position:relative; overflow:hidden; }
+  .kpi-label{ font-size:12px; color: var(--text-faint); margin-bottom:8px; }
+  .kpi-value{ font-family:'Fraunces', serif; font-size:26px; font-weight:600; color: var(--text); }
+  .kpi-value.good{ color: var(--good); }
+  .kpi-value.bad{ color: var(--bad); }
+  .kpi-sub{ font-size:11.5px; color: var(--text-faint); margin-top:6px; }
+
+  .section-title{ font-size:15px; color: var(--text-dim); margin: 26px 0 12px 0; display:flex; align-items:center; gap:8px; }
+  .section-title::after{ content:""; flex:1; height:1px; background: var(--border-soft); }
+
+  /* ---------- Forms ---------- */
+  .form-card{ margin-bottom: 20px; }
+  .form-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:12px; color: var(--text-faint); }
+  .field input, .field select, .field textarea{
+    background: var(--bg-raised); border:1px solid var(--border); color: var(--text);
+    padding: 9px 10px; border-radius: var(--radius-sm); font-size:14px; outline:none;
+    transition: border-color .12s ease;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{ border-color: var(--accent-dim); }
+  .field .readout{ font-size:14px; color: var(--accent); padding-top:9px; font-family:'Fraunces',serif; font-weight:600; }
+  .form-actions{ display:flex; gap:10px; margin-top:14px; justify-content:flex-end; }
+
+  .btn{
+    padding: 6px 12px; border-radius: var(--radius-sm); border:1px solid transparent; font-size:12px;
+    cursor:pointer; font-weight:600; transition: filter .12s ease, transform .05s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .btn svg{ width: 14px; height: 14px; }
+  .btn:active{ transform: scale(0.98); }
+  .btn-primary{ background: var(--accent); color: #FFFFFF; }
+  .btn-primary:hover{ filter: brightness(1.08); }
+  .btn-ghost{ background: transparent; color: var(--text-dim); border-color: var(--border); }
+  .btn-ghost:hover{ background: var(--surface-2); color: var(--text); }
+  .btn-danger{ background: transparent; color: var(--bad); border-color: var(--bad-bg); }
+  .btn-danger:hover{ background: var(--bad-bg); }
+  .btn-sm{ padding: 4px 8px; font-size:11px; }
+  .btn-sm svg{ width: 12px; height: 12px; }
+
+  /* ---------- Tables ---------- */
+  .table-wrap{ overflow-x:auto; border:1px solid var(--border-soft); border-radius: var(--radius); }
+  table{ width:100%; border-collapse: collapse; font-size:13.5px; min-width: 560px; }
+  thead th{
+    text-align:left; padding: 10px 12px; color: var(--text-faint); font-weight:600; font-size:11.5px;
+    background: var(--bg-raised); border-bottom:1px solid var(--border-soft); white-space:nowrap;
+  }
+  tbody td{ padding: 10px 12px; border-bottom:1px solid var(--border-soft); color: var(--text-dim); white-space:nowrap; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background: var(--surface-2); }
+  td.num, th.num{ text-align:right; font-variant-numeric: tabular-nums; }
+  td.strong{ color: var(--text); font-weight:600; }
+  .pill{ display:inline-block; padding:2px 9px; border-radius: 100px; font-size:11px; font-weight:600; }
+  .pill.good{ background: var(--good-bg); color: var(--good); }
+  .pill.bad{ background: var(--bad-bg); color: var(--bad); }
+  .row-actions{ display:flex; gap:6px; }
+  .icon-btn{ background:none; border:none; cursor:pointer; color: var(--text-faint); padding:4px; border-radius:5px; }
+  .icon-btn:hover{ color: var(--text); background: var(--bg-raised); }
+  .empty-row td{ text-align:center; color: var(--text-faint); padding: 26px 12px; }
+
+  /* ---------- Misc ---------- */
+  .two-col{ display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+  .filter-bar{ display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  .filter-bar select, .filter-bar input{
+    background: var(--bg-raised); border:1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: var(--radius-sm); font-size:13px;
+  }
+  .chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .chip{
+    background: var(--bg-raised); border:1px solid var(--border); color: var(--text-dim);
+    padding:5px 11px; border-radius:100px; font-size:12px; display:flex; align-items:center; gap:7px;
+  }
+  .chip button{ background:none; border:none; color: var(--text-faint); cursor:pointer; font-size:13px; line-height:1; padding:0; }
+
+  .divider-stitch{
+    height:1px; margin: 24px 0;
+    background-image: repeating-linear-gradient(to right, var(--stitch) 0 6px, transparent 6px 12px);
+  }
+
+  .tailor-card{ display:flex; flex-direction:column; gap:10px; }
+  .tailor-head{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .tailor-name{ font-family:'Fraunces',serif; font-size:17px; }
+  .tailor-stats{ display:grid; grid-template-columns: repeat(4,1fr); gap:10px; margin-top:6px; }
+  .tstat{ background: var(--bg-raised); border-radius: var(--radius-sm); padding:9px 10px; }
+  .tstat .n{ font-family:'Fraunces',serif; font-size:16px; color: var(--text); }
+  .tstat .l{ font-size:10.5px; color: var(--text-faint); margin-top:2px; }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+    padding: 11px 18px; border-radius: var(--radius); font-size:13.5px; opacity:0; pointer-events:none;
+    transition: all .22s ease; z-index: 999; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
+  .modal-backdrop{
+    position:fixed; inset:0; background: rgba(30,39,51,.45); display:none; align-items:center; justify-content:center;
+    z-index: 900; padding: 20px;
+  }
+  .modal-backdrop.show{ display:flex; }
+  .modal{ background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding:22px; max-width:440px; width:100%; max-height:90vh; overflow-y:auto; box-shadow: 0 16px 36px rgba(0,0,0,0.14); }
+  .modal.modal-lg{ max-width: 820px; }
+  .modal.modal-md{ max-width: 560px; }
+  .modal h3{ font-size:17px; margin-bottom:8px; }
+  .modal p{ color: var(--text-dim); font-size:13.5px; line-height:1.5; margin: 0 0 18px 0; }
+  .modal .form-actions{ margin-top:0; }
+  .tailor-badge-id{ font-family: monospace; font-size: 11px; padding: 2px 7px; background: var(--surface-2); border-radius: 4px; color: var(--accent); font-weight: 600; }
+  .status-pill{ display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .status-pill.active{ background: var(--good-bg); color: var(--good); }
+  .status-pill.inactive{ background: var(--bad-bg); color: var(--bad); }
+  .progress-pill{ font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; display:inline-block; }
+  .progress-pill.pending{ background: #FEF3C7; color: #92400E; }
+  .progress-pill.done{ background: var(--good-bg); color: var(--good); }
+  .batch-assign-table{ width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  .batch-assign-table th{ background: var(--bg); font-size: 11.5px; padding: 7px 9px; text-align: left; color: var(--text-faint); font-weight: 600; border-bottom: 1px solid var(--border-soft); }
+  .batch-assign-table td{ padding: 7px 9px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+  .batch-assign-table input, .batch-assign-table select{ padding: 7px 9px; font-size: 13px; width: 100%; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-raised); color:var(--text); box-sizing:border-box; }
+  .batch-assign-table input:focus, .batch-assign-table select:focus{ border-color:var(--accent-dim); outline:none; }
+  .action-row-btns{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .bottom-nav{ display:none; }
+
+  @media (max-width: 900px){
+    .kpi-grid{ grid-template-columns: repeat(2,1fr); }
+    .two-col{ grid-template-columns: 1fr; }
+    .sidebar{ display:none; }
+    .main{
+      padding: 16px 14px calc(96px + env(safe-area-inset-bottom)) 14px;
+      padding-left: calc(14px + env(safe-area-inset-left));
+      padding-right: calc(14px + env(safe-area-inset-right));
+    }
+    .mobile-topbar{
+      display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:50;
+      background: var(--bg-raised); border-bottom:1px solid var(--border-soft);
+      padding: calc(14px + env(safe-area-inset-top)) 16px 14px 16px;
+      margin: -16px -14px 20px -14px;
+    }
+    .mobile-topbar h1{ font-size:17px; }
+    .topline{ margin-bottom:16px; }
+    .topline h2{ font-size:22px; }
+    .bottom-nav{
+      display:flex; position:fixed; bottom:0; left:0; right:0; background: var(--bg-raised);
+      border-top:1px solid var(--border-soft); z-index: 60;
+      padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+      padding-left: calc(4px + env(safe-area-inset-left));
+      padding-right: calc(4px + env(safe-area-inset-right));
+      overflow-x:auto; -webkit-overflow-scrolling: touch;
+    }
+    .bottom-nav button{
+      flex: 1 1 0; min-width: 56px; display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none;
+      color: var(--text-faint); font-size:9.5px; padding:6px 4px; cursor:pointer; min-height:44px;
+    }
+    .bottom-nav button.active{ color: var(--accent); }
+    .bottom-nav svg{ width:19px; height:19px; }
+
+    /* Comfortable tap targets on touch devices */
+    .btn{ min-height:38px; }
+    .btn-sm{ min-height:32px; }
+    .icon-btn{ padding:7px; min-width:32px; min-height:32px; }
+    .nav-btn{ min-height:40px; }
+
+    /* Prevent iOS Safari auto-zoom on focus (needs >=16px font) */
+    input, select, textarea{ font-size:16px !important; }
+  }
+  @media (max-width: 560px){
+    .kpi-grid{ grid-template-columns: repeat(2,1fr); gap:10px; }
+    .kpi-card{ padding:14px; }
+    .kpi-value{ font-size:21px; word-break:break-word; }
+    .kpi-label{ font-size:11px; }
+    .kpi-sub{ font-size:10.5px; }
+    table{ min-width: 480px; }
+    .tailor-stats{ grid-template-columns: repeat(2,1fr); }
+    .card{ padding:14px; }
+    .section-title{ font-size:14px; margin: 20px 0 10px 0; }
+
+    /* Any inline two-column form grids collapse to one column */
+    .form-grid[style*="1fr 1fr"],
+    .form-grid[style*="repeat(auto-fit"]{ grid-template-columns: 1fr !important; }
+
+    .form-actions{ flex-direction:column-reverse; align-items:stretch; gap:8px; }
+    .form-actions .btn{ width:100%; }
+
+    .action-row-btns{ flex-direction:column; align-items:stretch; }
+    .action-row-btns > *{ width:100%; }
+
+    .filter-bar{ flex-direction:column; align-items:stretch; }
+    .filter-bar select, .filter-bar input{ width:100%; }
+
+    .modal-backdrop{ padding:12px; }
+    .modal{ padding:16px; border-radius:12px; max-height:92vh; }
+    .modal h3{ font-size:16px; }
+
+    .tailor-head{ flex-direction:column; gap:8px; }
+
+    [style*="grid-template-columns:repeat(3,1fr)"],
+    [style*="grid-template-columns: repeat(3,1fr)"]{ grid-template-columns: repeat(2,1fr) !important; }
+  }
+  @media (max-width: 400px){
+    .kpi-grid{ grid-template-columns: 1fr; }
+    .tailor-stats{ grid-template-columns: repeat(2,1fr); }
+    .bottom-nav button span{ display:none; }
+    .bottom-nav button{ min-width:44px; }
+    .bottom-nav svg{ width:21px; height:21px; }
+  }
+
+  .analytics-filter-card{ margin-bottom:20px; }
+  .analytics-filter-title{ font-family:'Fraunces',serif; font-size:18px; margin-bottom:12px; }
+  .analytics-filter-note{ font-size:11.5px; color:var(--text-faint); margin-top:10px; }
+  .chart-card{ padding:14px 16px 10px; overflow:hidden; }
+  .svg-chart-head{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin:0 2px 8px; }
+  .svg-chart-head strong{ font-family:'Fraunces',serif; font-size:16px; }
+  .svg-chart-head span{ font-size:11px; color:var(--text-faint); text-align:right; }
+  .analytics-svg{ display:block; width:100%; height:auto; min-height:220px; }
+  .analytics-charts{ align-items:start; }
+  @media (max-width:900px){ .analytics-svg{ min-height:200px; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main">
+    <div class="mobile-topbar">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M7 8V6a5 5 0 0110 0v2" stroke="#2E6FE0" stroke-width="1.6"/><rect x="4" y="8" width="16" height="12" rx="2" stroke="#2E6FE0" stroke-width="1.6"/></svg>
+      <h1 style="color:var(--text)">doubleBee</h1>
+    </div>
+    <div class="topline">
+      <div>
+        <h2 id="pageTitle">Dashboard</h2>
+        <p id="pageSub">Your business, at a glance.</p>
+      </div>
+      <div id="topActions"></div>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<nav class="bottom-nav" id="bottomNav"></nav>
+<div class="toast" id="toast"></div>
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<script>
+/* =========================================================
+   DOUBLEBEE — Bag Business Manager
+   Single-file vanilla JS app. Data persisted to localStorage.
+   ========================================================= */
+
+const STORAGE_KEY = "doublebee_bagbiz_v1";
+const CURRENCY = "LKR";
+
+const NAV_ITEMS = [
+  { id:"dashboard", label:"Dashboard", icon: iconHome },
+  { id:"categories", label:"Bag Catalog", icon: iconTag },
+  { id:"orders", label:"Orders", icon: iconBox },
+  { id:"returns", label:"Returns", icon: iconReturn },
+  { id:"reports", label:"Reports", icon: iconChart },
+  { id:"finance", label:"Income & Expenses", icon: iconCoin },
+  { id:"tailors", label:"Tailors", icon: iconNeedle },
+  { id:"data", label:"Backup & Restore", icon: iconDisk },
+];
+
+let state = loadState();
+let currentTab = "dashboard";
+
+function defaultState(){
+  return {
+    categories: [],
+    orders: [],
+    returns: [],
+    income: [],
+    expenses: [],
+    incomeTypes: ["Sales", "Custom Order", "Other"],
+    expenseTypes: ["Raw Materials", "Marketing", "Utilities", "Rent", "Wages", "Other"],
+    tailors: [],
+    assignments: [],
+    payments: [],
+    completions: [],
+    colors: ["Black", "Red", "Brown", "Blue", "Green", "White", "Navy", "Tan", "Maroon", "Beige", "Yellow", "Olive"],
+    settings: { defaultDelivery: 500 },
+  };
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    return Object.assign(defaultState(), parsed);
+  }catch(e){ return defaultState(); }
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function fmt(n){
+  n = Number(n)||0;
+  return CURRENCY + " " + n.toLocaleString("en-LK", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtNum(n){ return Number(n)||0; }
+function monthKey(dateStr){ return (dateStr||"").slice(0,7); }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function getCategoryColors(cat){
+  if(!cat) return [];
+  if(Array.isArray(cat.colors)) return cat.colors.map(c=>String(c).trim()).filter(Boolean);
+  if(typeof cat.colors === "string") return cat.colors.split(",").map(c=>c.trim()).filter(Boolean);
+  return [];
+}
+
+let tailorFilterState = { month: "all", status: "all", search: "" };
+
+function getAllColors(){
+  const base = Array.isArray(state.colors) && state.colors.length ? state.colors : ["Black", "Red", "Brown", "Blue", "Green", "White", "Navy", "Tan", "Maroon", "Beige", "Yellow", "Olive"];
+  const fromCategories = (state.categories||[]).flatMap(c => getCategoryColors(c));
+  return Array.from(new Set([...base, ...fromCategories])).map(c => String(c).trim()).filter(Boolean);
+}
+
+function addGlobalColor(newCol){
+  newCol = (newCol||"").trim();
+  if(!newCol) return;
+  if(!Array.isArray(state.colors)) state.colors = [];
+  if(!state.colors.some(c => c.toLowerCase() === newCol.toLowerCase())){
+    state.colors.push(newCol);
+    saveState();
+  }
+}
+
+function getTailorCode(t, index){
+  if(t.code) return t.code;
+  if(typeof index === "number") return "T-" + String(index + 1).padStart(3, "0");
+  const idx = (state.tailors||[]).findIndex(x => x.id === t.id);
+  return idx >= 0 ? "T-" + String(idx + 1).padStart(3, "0") : "T-001";
+}
+
+function getTailorStats(tailorId, monthFilter = "all"){
+  const allAssigns = (state.assignments||[]).filter(a => a.tailorId === tailorId);
+  const filteredAssigns = monthFilter && monthFilter !== "all" 
+    ? allAssigns.filter(a => (a.month || (a.date||"").slice(0,7)) === monthFilter)
+    : allAssigns;
+  
+  const totalAssigned = filteredAssigns.reduce((s, a) => s + (Number(a.assignedQty)||0), 0);
+  const totalCompleted = filteredAssigns.reduce((s, a) => s + (Number(a.completedQty)||0), 0);
+  const inProgress = Math.max(0, totalAssigned - totalCompleted);
+  const totalEarned = filteredAssigns.reduce((s, a) => s + (Number(a.completedQty)||0) * (Number(a.rate)||0), 0);
+
+  const allPayments = (state.payments||[]).filter(p => p.tailorId === tailorId);
+  const filteredPayments = monthFilter && monthFilter !== "all"
+    ? allPayments.filter(p => (p.month || (p.date||"").slice(0,7)) === monthFilter)
+    : allPayments;
+  const totalPaid = filteredPayments.reduce((s, p) => s + (Number(p.amount)||0), 0);
+
+  // Cumulative all-time stats for lifetime balance and in-progress carryover
+  const cumEarned = allAssigns.reduce((s, a) => s + (Number(a.completedQty)||0) * (Number(a.rate)||0), 0);
+  const cumPaid = allPayments.reduce((s, p) => s + (Number(p.amount)||0), 0);
+  const balance = cumEarned - cumPaid;
+
+  const cumAssigned = allAssigns.reduce((s, a) => s + (Number(a.assignedQty)||0), 0);
+  const cumCompleted = allAssigns.reduce((s, a) => s + (Number(a.completedQty)||0), 0);
+  const cumInProgress = Math.max(0, cumAssigned - cumCompleted);
+
+  const allCompletions = (state.completions||[]).filter(c => c.tailorId === tailorId);
+  const filteredCompletions = monthFilter && monthFilter !== "all"
+    ? allCompletions.filter(c => (c.month || (c.date||"").slice(0,7)) === monthFilter)
+    : allCompletions;
+
+  return {
+    totalAssigned, totalCompleted, inProgress, totalEarned, totalPaid, balance,
+    cumEarned, cumPaid, cumInProgress, cumAssigned, cumCompleted,
+    assigns: filteredAssigns, allAssigns, payments: filteredPayments, allPayments,
+    completions: filteredCompletions, allCompletions
+  };
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=> t.classList.remove("show"), 2200);
+}
+
+function showModal(html, sizeClass = ""){
+  const box = document.getElementById("modalBox");
+  box.className = "modal " + (sizeClass || "");
+  box.innerHTML = html;
+  document.getElementById("modalBackdrop").classList.add("show");
+}
+function closeModal(){ document.getElementById("modalBackdrop").classList.remove("show"); }
+document.getElementById("modalBackdrop").addEventListener("click", (e)=>{
+  if(e.target.id === "modalBackdrop") closeModal();
+});
+function confirmDelete(msg, onYes){
+  showModal(`
+    <h3>Delete this record?</h3>
+    <p>${esc(msg)} This can't be undone.</p>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirmYes">Delete</button>
+    </div>
+  `);
+  document.getElementById("confirmYes").onclick = ()=>{ onYes(); closeModal(); };
+}
+
+/* ---------------- Icons (inline SVG, stroke = currentColor) ---------------- */
+function iconHome(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 11l8-7 8 7"/><path d="M6 10v9a1 1 0 001 1h10a1 1 0 001-1v-9"/></svg>`; }
+function iconTag(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l8 8-9 9-8-8V4h8z"/><circle cx="8" cy="8" r="1.4"/></svg>`; }
+function iconBox(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8l9-5 9 5-9 5-9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>`; }
+function iconReturn(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 10h11a5 5 0 010 10H9"/><path d="M8 6l-4 4 4 4"/></svg>`; }
+function iconCoin(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.3 9.6c0-1.2 1.2-1.9 2.7-1.9 1.7 0 2.8.8 2.8 2 0 2.6-5.5 1.3-5.5 4 0 1.2 1.2 2 2.7 2 1.5 0 2.7-.7 2.8-2"/></svg>`; }
+function iconNeedle(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 4L9 15"/><circle cx="6" cy="18" r="2.5"/><path d="M13 6l3-2 4 4-2 3"/></svg>`; }
+function iconDisk(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h8V4"/><path d="M8 14h8v6H8z"/></svg>`; }
+function iconChart(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M11 20V4M18 20v-7"/><path d="M3 20h18"/></svg>`; }
+function iconPlus(){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>`; }
+function iconEdit(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l1-4L16 5l3 3L8 19l-4 1z"/></svg>`; }
+function iconTrash(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>`; }
+function iconEye(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`; }
+function iconPalette(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.5-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16c3.3 0 6-2.7 6-6 0-5.5-4.5-9.6-10-9.6z"/></svg>`; }
+function iconPower(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>`; }
+function iconHistory(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/><path d="M3.05 11a9 9 0 0 1 .5-2m-.5 2H7"/></svg>`; }
+function iconCheckCircle(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`; }
+
+/* ---------------- Navigation shell ---------------- */
+function renderNav(){
+  const sidebar = document.getElementById("sidebar");
+  sidebar.innerHTML = `
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" fill="none"><path d="M7 8V6a5 5 0 0110 0v2" stroke="#2E6FE0" stroke-width="1.6"/><rect x="4" y="8" width="16" height="12" rx="2" stroke="#2E6FE0" stroke-width="1.6"/><path d="M4 13h16" stroke="#DCE3EC" stroke-width="1.2"/></svg>
+      <div class="brand-text"><h1>doubleBee</h1><span>Bag business manager</span></div>
+    </div>
+    ${NAV_ITEMS.map(item => `
+      <button class="nav-btn ${currentTab===item.id?'active':''}" data-tab="${item.id}">
+        ${item.icon()} ${item.label}
+      </button>
+    `).join("")}
+    <div class="sidebar-foot">Data is stored only on this device.<br>Back up regularly from the Backup tab.</div>
+  `;
+  sidebar.querySelectorAll(".nav-btn").forEach(b=> b.addEventListener("click", ()=> setTab(b.dataset.tab)));
+
+  const bn = document.getElementById("bottomNav");
+  bn.innerHTML = NAV_ITEMS.map(item=>{
+    return `<button class="${currentTab===item.id?'active':''}" data-tab="${item.id}">${item.icon()}<span>${item.label.split(" ")[0]}</span></button>`;
+  }).join("");
+  bn.querySelectorAll("button").forEach(b=> b.addEventListener("click", ()=> setTab(b.dataset.tab)));
+}
+
+const TITLES = {
+  dashboard: ["Dashboard", "Your business, at a glance."],
+  categories: ["Bag Catalog", "Manage bag types, cost and selling price."],
+  orders: ["Daily Orders", "Log orders and see profit calculated live."],
+  returns: ["Delivery Returns", "Track returns and their impact on profit."],
+  reports: ["Reports", "Gross profit by time period and bag category."],
+  finance: ["Income & Expenses", "Everything coming in and going out, beyond bag sales."],
+  tailors: ["Tailors", "Assignments, progress and payments."],
+  data: ["Backup & Restore", "Export your data or bring it back from a file."],
+};
+
+function setTab(tab){
+  currentTab = tab;
+  document.getElementById("pageTitle").textContent = TITLES[tab][0];
+  document.getElementById("pageSub").textContent = TITLES[tab][1];
+  renderNav();
+  render();
+  window.scrollTo({top:0, behavior:"instant"});
+}
+
+function render(){
+  const view = document.getElementById("view");
+  const top = document.getElementById("topActions");
+  top.innerHTML = "";
+  if(currentTab==="dashboard") view.innerHTML = renderDashboard();
+  else if(currentTab==="categories") view.innerHTML = renderCategories();
+  else if(currentTab==="orders") view.innerHTML = renderOrders();
+  else if(currentTab==="returns") view.innerHTML = renderReturns();
+  else if(currentTab==="reports") view.innerHTML = renderReports();
+  else if(currentTab==="finance") view.innerHTML = renderFinance();
+  else if(currentTab==="tailors") view.innerHTML = renderTailors();
+  else if(currentTab==="data") view.innerHTML = renderData();
+  bindTabEvents();
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function renderDashboard(){
+  const currentDate = todayStr();
+  const allDates = [...state.orders.map(o=>o.date), ...state.returns.map(r=>r.date), ...state.expenses.map(e=>e.date)].filter(Boolean);
+  const detectedYears = Array.from(new Set(allDates.map(d=>d.slice(0,4)))).filter(Boolean).sort().reverse();
+  const currentYear = currentDate.slice(0,4);
+  const currentMonthNum = currentDate.slice(5,7);
+  const availableYears = detectedYears.length ? detectedYears : [currentYear];
+  if(!availableYears.includes(currentYear)) availableYears.unshift(currentYear);
+
+  const selectedYear = dashboardState.year || (dashboardState.date ? dashboardState.date.slice(0,4) : currentYear);
+  const selectedMonthNum = dashboardState.month || (dashboardState.date ? dashboardState.date.slice(5,7) : currentMonthNum);
+  const selectedMonth = selectedYear + "-" + selectedMonthNum;
+  const selectedCategory = dashboardState.categoryId || "all";
+  const selectedStatus = dashboardState.status || "all";
+
+  const monthOptions = [
+    {val: "01", name: "January"},
+    {val: "02", name: "February"},
+    {val: "03", name: "March"},
+    {val: "04", name: "April"},
+    {val: "05", name: "May"},
+    {val: "06", name: "June"},
+    {val: "07", name: "July"},
+    {val: "08", name: "August"},
+    {val: "09", name: "September"},
+    {val: "10", name: "October"},
+    {val: "11", name: "November"},
+    {val: "12", name: "December"}
+  ];
+
+  const matches = (o)=> (selectedCategory==="all" || o.categoryId===selectedCategory)
+    && (selectedStatus==="all" || (o.status||"Completed")===selectedStatus);
+  const yearOrders = state.orders.filter(o=> (o.date||"").startsWith(selectedYear+"-") && matches(o));
+  const monthOrders = state.orders.filter(o=> monthKey(o.date)===selectedMonth && matches(o));
+  const monthReturns = state.returns.filter(r=> monthKey(r.date)===selectedMonth && (selectedCategory==="all" || r.categoryId===selectedCategory));
+  const monthExpenses = state.expenses.filter(e=> monthKey(e.date)===selectedMonth);
+
+  // Financial profit uses completed orders only. Other income is intentionally excluded.
+  const completedOrders = state.orders.filter(o=> monthKey(o.date)===selectedMonth
+    && (selectedCategory==="all" || o.categoryId===selectedCategory)
+    && (o.status||"Completed")==="Completed");
+  const grossProfit = completedOrders.reduce((s,o)=> s + orderTotals(o).totalProfit, 0);
+  const returnLoss = monthReturns.reduce((s,r)=> s + returnTotalLoss(r), 0);
+  const totalExpenses = monthExpenses.reduce((s,e)=> s + Number(e.amount||0), 0);
+  const profitAfterReturns = grossProfit - returnLoss;
+  const netProfit = profitAfterReturns - totalExpenses;
+  const totalSalesIncome = completedOrders.reduce((s,o)=> s + orderTotals(o).totalSelling, 0);
+  const returnQtyTotal = monthReturns.reduce((s,r)=> s + (Number(r.qty)||0), 0);
+
+  const categories = state.categories;
+  const statuses = ["all","Completed","Pending","Cancelled"];
+
+  const monthlyData = Array.from({length:12},(_,i)=>{
+    const key = selectedYear + "-" + String(i+1).padStart(2,"0");
+    return { label: new Date(Number(selectedYear),i,1).toLocaleDateString("en-US",{month:"short"}),
+      value: state.orders.filter(o=>monthKey(o.date)===key && matches(o)).length };
+  });
+
+  const daysInMonth = new Date(Number(selectedYear), Number(selectedMonthNum), 0).getDate();
+  const dailyData = Array.from({length:daysInMonth},(_,i)=>{
+    const day=String(i+1).padStart(2,"0"), key=selectedMonth+"-"+day;
+    return {label:String(i+1), value:monthOrders.filter(o=>o.date===key).length};
+  });
+
+  const weeklyData = Array.from({length:5},(_,i)=>{
+    const from=i*7+1, to=Math.min((i+1)*7,daysInMonth);
+    return {label:`W${i+1}`, value:monthOrders.filter(o=>{ const d=Number((o.date||"").slice(8,10)); return d>=from&&d<=to; }).length, range:`${from}–${to}`};
+  }).filter(w=>Number(w.range.split("–")[0])<=daysInMonth);
+
+  const categoryMonthData = categories.map(c=>({
+    label:c.name,
+    value:monthOrders.filter(o=>o.categoryId===c.id).length
+  })).sort((a,b)=>b.value-a.value);
+
+  const monthlyChart = renderSvgLineChart(monthlyData,"Monthly total orders",`${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"Selected category")} · order count`);
+  const dailyChart = renderSvgBarChart(dailyData,"Daily total orders",`${monthLabel(selectedMonth)} · ${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"")} · order count`);
+  const weeklyChart = renderSvgBarChart(weeklyData.map(x=>({...x,label:x.label+" ("+x.range+")"})),"Weekly total orders",`${monthLabel(selectedMonth)} · ${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"")}`);
+  const categoryChart = renderSvgBarChart(categoryMonthData,"Category-wise orders",monthLabel(selectedMonth));
+
+  return `
+    <div class="card analytics-filter-card">
+      <div class="analytics-filter-title">Order analytics</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Analysis month (12 Months)</label>
+          <select id="dashMonth">
+            ${monthOptions.map(m=>`<option value="${m.val}" ${selectedMonthNum===m.val?'selected':''}>${m.name}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>Analysis year</label>
+          <select id="dashYear">
+            ${availableYears.map(y=>`<option value="${y}" ${selectedYear===y?'selected':''}>${y}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>Bag category</label><select id="dashCategory"><option value="all">All Categories</option>${categories.map(c=>`<option value="${c.id}" ${selectedCategory===c.id?'selected':''}>${esc(c.name)}</option>`).join("")}</select></div>
+        <div class="field"><label>Order status</label><select id="dashStatus">${statuses.map(st=>`<option value="${st}" ${selectedStatus===st?'selected':''}>${st==="all"?"All Statuses":st}</option>`).join("")}</select></div>
+      </div>
+      <div class="analytics-filter-note">Select any of the 12 months and year to view daily, weekly, and category order analytics and financial breakdown.</div>
+    </div>
+
+    <div class="grid kpi-grid">
+      <div class="card kpi-card"><div class="kpi-label">Total Sales Income</div><div class="kpi-value">${fmt(totalSalesIncome)}</div><div class="kpi-sub">Completed orders · ${completedOrders.reduce((s,o)=>s+(Number(o.qty)||0),0)} bags</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Total Operating Expenses</div><div class="kpi-value">${fmt(totalExpenses)}</div><div class="kpi-sub">${monthExpenses.length} expense entr${monthExpenses.length===1?'y':'ies'}</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Total Return Loss</div><div class="kpi-value bad">${fmt(returnLoss)}</div><div class="kpi-sub">${monthReturns.length} return${monthReturns.length===1?'':'s'} · ${returnQtyTotal} bags</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Net Monthly Profit</div><div class="kpi-value ${netProfit>=0?'good':'bad'}">${fmt(netProfit)}</div><div class="kpi-sub">Profit after returns − total expenses · other income excluded</div></div>
+    </div>
+
+    <div class="section-title">12-month order comparison · ${selectedYear}</div>
+    <div class="card chart-card">${monthlyChart}</div>
+
+    <div class="two-col analytics-charts">
+      <div><div class="section-title">Daily order comparison · ${monthLabel(selectedMonth)}</div><div class="card chart-card">${dailyChart}</div></div>
+      <div><div class="section-title">Weekly order comparison · ${monthLabel(selectedMonth)}</div><div class="card chart-card">${weeklyChart}</div></div>
+    </div>
+
+    <div class="section-title">Category-wise order comparison · ${monthLabel(selectedMonth)}</div>
+    <div class="card chart-card">${categoryChart}</div>
+
+    <div class="section-title">Category-wise financial breakdown · ${monthLabel(selectedMonth)}</div>
+    <div class="table-wrap"><table><thead><tr><th>Bag Category</th><th class="num">Bags Sold</th><th class="num">Total Sales</th><th class="num">Returned</th><th class="num">Profit After Return</th></tr></thead><tbody>
+      ${categoryMonthData.length ? categoryMonthData.map(d=>{
+        const cat=categories.find(c=>c.name===d.label); const orders=monthOrders.filter(o=>o.categoryId===cat?.id); const returns=monthReturns.filter(r=>r.categoryId===cat?.id);
+        const sales=orders.reduce((s,o)=>s+orderTotals(o).totalSelling,0); const profit=orders.reduce((s,o)=>s+orderTotals(o).totalProfit,0)-returns.reduce((s,r)=>s+returnTotalLoss(r),0);
+        const rq=returns.reduce((s,r)=>s+(Number(r.qty)||0),0);
+        return `<tr><td class="strong">${esc(d.label)}</td><td class="num">${d.value}</td><td class="num">${fmt(sales)}</td><td class="num">${rq}</td><td class="num" style="color:${profit>=0?'var(--good)':'var(--bad)'}">${fmt(profit)}</td></tr>`;
+      }).join("") : `<tr class="empty-row"><td colspan="5">No orders logged for this month.</td></tr>`}
+    </tbody></table></div>
+  `;
+}
+
+function chartAxisMax(data){
+  const max=Math.max(0,...data.map(d=>Number(d.value)||0));
+  return max>0 ? Math.ceil(max*1.15) : 1;
+}
+function renderSvgLineChart(data,title,subtitle){
+  const W=900,H=300,L=48,R=18,T=36,B=44, pw=W-L-R, ph=H-T-B, max=chartAxisMax(data);
+  const pts=data.map((d,i)=>{const x=L+(data.length===1?pw/2:i*pw/(data.length-1)); const y=T+ph-(Number(d.value)||0)/max*ph; return {...d,x,y};});
+  const grid=[0,0.25,0.5,0.75,1].map(v=>{const y=T+ph-v*ph; return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="var(--border-soft)"/><text x="${L-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--text-faint)">${Math.round(max*v)}</text>`;}).join("");
+  const path=pts.map((p,i)=>(i?"L":"M")+`${p.x},${p.y}`).join(" ");
+  const labels=pts.map(p=>`<text x="${p.x}" y="${H-16}" text-anchor="middle" font-size="10" fill="var(--text-faint)">${esc(p.label)}</text><circle cx="${p.x}" cy="${p.y}" r="3.5" fill="var(--accent)"/><title>${esc(p.label)}: ${p.value} orders</title>`).join("");
+  return `<div class="svg-chart-head"><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div><svg class="analytics-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${grid}<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${labels}</svg>`;
+}
+function renderSvgBarChart(data,title,subtitle){
+  const W=900,H=300,L=48,R=18,T=36,B=54,pw=W-L-R,ph=H-T-B,max=chartAxisMax(data),gap=Math.min(10,pw/data.length*.18),bw=Math.max(4,pw/data.length-gap);
+  const grid=[0,0.25,0.5,0.75,1].map(v=>{const y=T+ph-v*ph; return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="var(--border-soft)"/><text x="${L-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--text-faint)">${Math.round(max*v)}</text>`;}).join("");
+  const bars=data.map((d,i)=>{const val=Number(d.value)||0,h=val/max*ph,x=L+i*(pw/data.length)+(gap/2),y=T+ph-h; const showLabel=data.length<=12||i%2===0; return `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1)}" rx="3" fill="var(--accent)" opacity=".88"><title>${esc(d.label)}: ${val} orders</title></rect>${showLabel?`<text x="${x+bw/2}" y="${H-17}" text-anchor="middle" font-size="9.5" fill="var(--text-faint)">${esc(d.label)}</text>`:""}`;}).join("");
+  return `<div class="svg-chart-head"><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div><svg class="analytics-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${grid}${bars}</svg>`;
+}
+
+function renderSvgProfitBarChart(data,title,subtitle){
+  const W=900,H=320,L=76,R=20,T=36,B=54,pw=W-L-R,ph=H-T-B;
+  const vals=data.map(d=>Number(d.value)||0);
+  let maxVal=Math.max(0,...vals);
+  let minVal=Math.min(0,...vals);
+  if(maxVal===0 && minVal===0){ maxVal=1000; minVal=0; }
+  else {
+    if(maxVal>0) maxVal=Math.ceil(maxVal*1.15);
+    if(minVal<0) minVal=Math.floor(minVal*1.15);
+  }
+  const span=maxVal-minVal || 1;
+  const yZero=T+(maxVal/span)*ph;
+  const gap=Math.min(12,pw/data.length*.2), bw=Math.max(10,pw/data.length-gap);
+
+  const steps=4;
+  const grid=Array.from({length:steps+1},(_,i)=>{
+    const v=maxVal-(span/steps)*i;
+    const y=T+(i/steps)*ph;
+    const isZero=Math.abs(v)<(span/100) || (minVal<0 && maxVal>0 && Math.abs(y-yZero)<2);
+    return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${isZero?'var(--text-dim)':'var(--border-soft)'}" stroke-width="${isZero?'1.5':'1'}" stroke-dasharray="${isZero?'':'3 3'}"/><text x="${L-10}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--text-faint)">${Math.round(v).toLocaleString()}</text>`;
+  }).join("");
+
+  const bars=data.map((d,i)=>{
+    const val=Number(d.value)||0;
+    const x=L+i*(pw/data.length)+(gap/2);
+    let barY, barH, color;
+    if(val>=0){
+      const yVal=T+((maxVal-val)/span)*ph;
+      barY=yVal;
+      barH=Math.max(yZero-yVal, val>0?3:0);
+      color="var(--good)";
+    } else {
+      const yVal=T+((maxVal-val)/span)*ph;
+      barY=yZero;
+      barH=Math.max(yVal-yZero, 3);
+      color="var(--bad)";
+    }
+    const valFormatted=fmt(val);
+    return `
+      <rect x="${x}" y="${barY}" width="${bw}" height="${barH}" rx="3" fill="${color}" opacity=".9">
+        <title>${esc(d.fullLabel)}&#10;Net Profit: ${valFormatted}&#10;Sales: ${fmt(d.sales)}&#10;Gross Profit: ${fmt(d.grossProfit)}&#10;Return Loss: ${fmt(d.returnLoss)}&#10;Expenses: ${fmt(d.expenses)}</title>
+      </rect>
+      <text x="${x+bw/2}" y="${H-16}" text-anchor="middle" font-size="10" font-weight="500" fill="var(--text-dim)">${esc(d.label)}</text>
+    `;
+  }).join("");
+
+  return `<div class="svg-chart-head"><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div><svg class="analytics-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${grid}${bars}</svg>`;
+}
+
+let dashboardState = { month: null, year: null, categoryId: "all", status: "all" };
+
+function orderTotals(o){
+  const cat = state.categories.find(c=>c.id===o.categoryId) || {cost:0, price:0};
+  const qty = Number(o.qty)||0;
+  const deliveryPerUnit = Number(o.deliveryCharge)||0;
+  const discount = Math.max(0, Number(o.discount)||0);
+  const totalDelivery = qty * deliveryPerUnit;
+  const grossSelling = qty * Number(cat.price||0);
+  const totalSelling = grossSelling - discount;
+  const totalCost = qty * Number(cat.cost||0);
+  const totalProfit = totalSelling - totalCost - totalDelivery;
+  return { totalDelivery, grossSelling, discount, totalSelling, totalCost, totalProfit };
+}
+function returnRate(r){
+  return r.deliveryRate!=null ? Number(r.deliveryRate) : Number(state.settings.defaultDelivery)||0;
+}
+// Delivery cost lost on the returned bags (qty × delivery charge per bag).
+function returnDeliveryAmount(r){
+  return (Number(r.qty)||0) * returnRate(r);
+}
+// The profit-after-delivery that those bags had already contributed to gross profit — reversed out.
+function returnProfitImpact(r){
+  const cat = state.categories.find(c=>c.id===r.categoryId) || {cost:0, price:0};
+  const qty = Number(r.qty)||0;
+  return qty * (Number(cat.price||0) - Number(cat.cost||0) - returnRate(r));
+}
+// Total hit to net profit from this return = delivery amount + profit impact = qty × (price − cost).
+function returnTotalLoss(r){
+  return returnDeliveryAmount(r) + returnProfitImpact(r);
+}
+function monthLabel(m){
+  if(!m) return "";
+  const [y,mo] = m.split("-");
+  const d = new Date(Number(y), Number(mo)-1, 1);
+  return d.toLocaleDateString("en-US", {month:"long", year:"numeric"});
+}
+
+/* ============================================================
+   MODULE 1 — BAG CATALOG
+   ============================================================ */
+function renderCategories(){
+  const rows = state.categories;
+  return `
+    <div class="card form-card">
+      <h3 style="margin-bottom:14px;font-size:15px;">Add bag category</h3>
+      <form id="catForm" class="form-grid">
+        <div class="field"><label>Bag category name</label><input name="name" placeholder="e.g. Crocodile Bag" required></div>
+        <div class="field"><label>Available colours (comma-separated)</label><input name="colors" placeholder="e.g. Black, Red, Brown"></div>
+        <div class="field"><label>Production cost (${CURRENCY})</label><input name="cost" type="number" step="0.01" min="0" placeholder="0.00" required></div>
+        <div class="field"><label>Selling price (${CURRENCY})</label><input name="price" type="number" step="0.01" min="0" placeholder="0.00" required></div>
+        <div class="field"><label>Profit per unit</label><div class="readout" id="catProfitReadout">${CURRENCY} 0.00</div></div>
+      </form>
+      <div class="form-actions"><button class="btn btn-primary" id="catSubmit">${iconPlus()} Add category</button></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Bag Category</th><th class="num">Production Cost</th><th class="num">Selling Price</th><th class="num">Profit / Unit</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(c=>{
+            const colors = getCategoryColors(c);
+            return `
+            <tr>
+              <td class="strong">
+                <div>${esc(c.name)}</div>
+                ${colors.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">${colors.map(col=>`<span class="pill" style="font-size:10.5px;padding:1px 7px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);font-weight:500;">${esc(col)}</span>`).join("")}</div>` : ''}
+              </td>
+              <td class="num">${fmt(c.cost)}</td>
+              <td class="num">${fmt(c.price)}</td>
+              <td class="num"><span class="pill ${c.price-c.cost>=0?'good':'bad'}">${fmt(c.price-c.cost)}</span></td>
+              <td><div class="row-actions">
+                <button class="icon-btn" data-edit-cat="${c.id}">${iconEdit()}</button>
+                <button class="icon-btn" data-del-cat="${c.id}">${iconTrash()}</button>
+              </div></td>
+            </tr>
+          `;}).join("") : `<tr class="empty-row"><td colspan="5">No bag categories yet. Add your first one above.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ============================================================
+   MODULE 2 — DAILY ORDERS
+   ============================================================ */
+function renderOrders(){
+  if(!state.categories.length){
+    return `<div class="card">Add at least one bag category first, then come back to log orders.</div>`;
+  }
+  const rows = [...state.orders].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+  return `
+    <div class="card form-card">
+      <h3 style="margin-bottom:14px;font-size:15px;">Log an order</h3>
+      <form id="orderForm" class="form-grid">
+        <div class="field"><label>Date</label><input name="date" type="date" value="${todayStr()}" required></div>
+        <div class="field"><label>Bag category</label>
+          <select name="categoryId" required>
+            <option value="">Select…</option>
+            ${state.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>Quantity</label><input name="qty" type="number" min="1" value="1" required></div>
+        <div class="field"><label>Order status</label><select name="status"><option>Completed</option><option>Pending</option><option>Cancelled</option></select></div>
+        <div class="field"><label>Delivery charge / unit (${CURRENCY})</label><input name="deliveryCharge" type="number" step="0.01" min="0" value="${state.settings.defaultDelivery}" required></div>
+        <div class="field"><label>Discount amount (${CURRENCY})</label><input name="discount" type="number" step="0.01" min="0" value="0" placeholder="0.00"></div>
+        <div class="field"><label>Total delivery charge</label><div class="readout" id="ordDelivery">${CURRENCY} 0.00</div></div>
+        <div class="field"><label>Total selling price</label><div class="readout" id="ordSelling">${CURRENCY} 0.00</div></div>
+        <div class="field"><label>Total order profit</label><div class="readout" id="ordProfit">${CURRENCY} 0.00</div></div>
+      </form>
+      <div class="form-actions"><button class="btn btn-primary" id="orderSubmit">${iconPlus()} Log order</button></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Bag Category</th><th>Status</th><th class="num">Qty</th>
+          <th class="num">Delivery</th><th class="num">Discount</th><th class="num">Selling</th><th class="num">Profit</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(o=>{
+            const t = orderTotals(o);
+            const cat = state.categories.find(c=>c.id===o.categoryId);
+            return `<tr>
+              <td>${o.date}</td>
+              <td class="strong">${cat?esc(cat.name):'<span style="color:var(--bad)">Deleted category</span>'}</td>
+              <td><span class="pill ${(o.status||"Completed")==="Completed"?'good':((o.status||"")==="Cancelled"?'bad':'')}">${esc(o.status||"Completed")}</span></td>
+              <td class="num">${o.qty}</td>
+              <td class="num">${fmt(t.totalDelivery)}</td>
+              <td class="num" style="${t.discount>0?'color:var(--bad);font-weight:500;':''}">${t.discount>0 ? fmt(t.discount) : '—'}</td>
+              <td class="num">${fmt(t.totalSelling)}</td>
+              <td class="num" style="color:${t.totalProfit>=0?'var(--good)':'var(--bad)'}">${fmt(t.totalProfit)}</td>
+              <td><div class="row-actions">
+                <button class="icon-btn" data-edit-order="${o.id}">${iconEdit()}</button>
+                <button class="icon-btn" data-del-order="${o.id}">${iconTrash()}</button>
+              </div></td>
+            </tr>`;
+          }).join("") : `<tr class="empty-row"><td colspan="9">No orders logged yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ============================================================
+   MODULE 3 — RETURNS
+   ============================================================ */
+function renderReturns(){
+  if(!state.categories.length){
+    return `<div class="card">Add a bag category first — returns are calculated against catalog pricing.</div>`;
+  }
+  const rows = [...state.returns].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+  return `
+    <div class="card form-card">
+      <h3 style="margin-bottom:14px;font-size:15px;">Log a delivery return</h3>
+      <form id="returnForm" class="form-grid">
+        <div class="field"><label>Return date</label><input name="date" type="date" value="${todayStr()}" required></div>
+        <div class="field"><label>Bag category</label>
+          <select name="categoryId" required>
+            <option value="">Select…</option>
+            ${state.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>Returned quantity</label><input name="qty" type="number" min="1" value="1" required></div>
+        <div class="field"><label>Delivery charge / bag (${CURRENCY})</label><input name="deliveryRate" type="number" step="0.01" min="0" value="${state.settings.defaultDelivery}" required></div>
+        <div class="field"><label>Return delivery amount</label><div class="readout" id="retDelivery">${CURRENCY} 0.00</div></div>
+        <div class="field"><label>Total profit deducted</label><div class="readout" id="retLoss">${CURRENCY} 0.00</div></div>
+      </form>
+      <div class="form-actions"><button class="btn btn-primary" id="returnSubmit">${iconPlus()} Log return</button></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Return Date</th><th>Bag Category</th><th class="num">Qty</th>
+          <th class="num">Return Amount</th><th class="num">Profit Impact</th><th class="num">Total Loss</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(r=>{
+            const cat = state.categories.find(c=>c.id===r.categoryId);
+            const deliveryAmt = returnDeliveryAmount(r);
+            const profitImpact = returnProfitImpact(r);
+            const total = returnTotalLoss(r);
+            return `<tr>
+              <td>${r.date}</td>
+              <td>${cat?esc(cat.name):'<span style="color:var(--bad)">Deleted category</span>'}</td>
+              <td class="num">${r.qty}</td>
+              <td class="num">${fmt(deliveryAmt)}</td>
+              <td class="num">${fmt(profitImpact)}</td>
+              <td class="num" style="color:var(--bad)">${fmt(total)}</td>
+              <td><div class="row-actions"><button class="icon-btn" data-del-return="${r.id}">${iconTrash()}</button></div></td>
+            </tr>`;
+          }).join("") : `<tr class="empty-row"><td colspan="7">No returns logged. Good sign.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ============================================================
+   REPORTS — flexible time period + category
+   ============================================================ */
+let reportState = { start: null, end: null, categoryId: "all", year: null };
+
+function reportRange(preset){
+  const today = todayStr();
+  if(preset==="today") return { start: today, end: today };
+  if(preset==="week"){
+    const d = new Date(); const day = (d.getDay()+6)%7; // Monday=0
+    const monday = new Date(d); monday.setDate(d.getDate()-day);
+    return { start: monday.toISOString().slice(0,10), end: today };
+  }
+  if(preset==="month") return { start: today.slice(0,7)+"-01", end: today };
+  if(preset==="all"){
+    const dates = [...state.orders.map(o=>o.date), ...state.returns.map(r=>r.date)].filter(Boolean).sort();
+    return { start: dates.length?dates[0]:today, end: today };
+  }
+  return null;
+}
+
+function renderReports(){
+  if(!state.categories.length){
+    return `<div class="card">Add a bag category and log some orders first — reports are built from your order history.</div>`;
+  }
+  const today = todayStr();
+  const start = reportState.start || (today.slice(0,7)+"-01");
+  const end = reportState.end || today;
+  const categoryId = reportState.categoryId || "all";
+  const inRange = (d)=> !!d && d>=start && d<=end;
+
+  const allDates = [...state.orders.map(o=>o.date), ...state.returns.map(r=>r.date), ...state.expenses.map(e=>e.date)].filter(Boolean);
+  const detectedYears = Array.from(new Set(allDates.map(d=>d.slice(0,4)))).filter(Boolean).sort().reverse();
+  const currentYear = today.slice(0,4);
+  const availableYears = detectedYears.length ? detectedYears : [currentYear];
+  if(!availableYears.includes(currentYear)) availableYears.unshift(currentYear);
+  const reportYear = reportState.year || (reportState.start ? reportState.start.slice(0,4) : currentYear);
+
+  const orders = state.orders.filter(o=> inRange(o.date) && (categoryId==="all" || o.categoryId===categoryId));
+  const returns = state.returns.filter(r=> inRange(r.date) && (categoryId==="all" || r.categoryId===categoryId));
+
+  const totalBags = orders.reduce((s,o)=> s + (Number(o.qty)||0), 0);
+  const totalSelling = orders.reduce((s,o)=> s + orderTotals(o).totalSelling, 0);
+  const grossProfit = orders.reduce((s,o)=> s + orderTotals(o).totalProfit, 0);
+  const returnQty = returns.reduce((s,r)=> s + (Number(r.qty)||0), 0);
+  const returnLoss = returns.reduce((s,r)=> s + returnTotalLoss(r), 0);
+  const profitAfterReturn = grossProfit - returnLoss;
+
+  const catMap = {};
+  orders.forEach(o=>{
+    const cat = state.categories.find(c=>c.id===o.categoryId);
+    const name = cat ? cat.name : "Unknown";
+    if(!catMap[name]) catMap[name] = {orders:0, qty:0, sales:0, profit:0, returnQty:0, returnLoss:0};
+    const t = orderTotals(o);
+    catMap[name].orders += 1;
+    catMap[name].qty += Number(o.qty)||0;
+    catMap[name].sales += t.totalSelling;
+    catMap[name].profit += t.totalProfit;
+  });
+  returns.forEach(r=>{
+    const cat = state.categories.find(c=>c.id===r.categoryId);
+    const name = cat ? cat.name : "Unknown";
+    if(!catMap[name]) catMap[name] = {orders:0, qty:0, sales:0, profit:0, returnQty:0, returnLoss:0};
+    catMap[name].returnQty += Number(r.qty)||0;
+    catMap[name].returnLoss += returnTotalLoss(r);
+  });
+  const catRows = Object.entries(catMap).sort((a,b)=> b[1].sales - a[1].sales);
+
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthFullNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  const monthlyProfitData = Array.from({length:12}, (_, i)=>{
+    const mKey = reportYear + "-" + String(i+1).padStart(2, "0");
+    const mOrders = state.orders.filter(o => monthKey(o.date) === mKey && (categoryId === "all" || o.categoryId === categoryId) && (o.status || "Completed") === "Completed");
+    const mReturns = state.returns.filter(r => monthKey(r.date) === mKey && (categoryId === "all" || r.categoryId === categoryId));
+    const mExpenses = state.expenses.filter(e => monthKey(e.date) === mKey);
+
+    const mBags = mOrders.reduce((s, o) => s + (Number(o.qty) || 0), 0);
+    const mSales = mOrders.reduce((s, o) => s + orderTotals(o).totalSelling, 0);
+    const mGrossProfit = mOrders.reduce((s, o) => s + orderTotals(o).totalProfit, 0);
+    const mReturnLoss = mReturns.reduce((s, r) => s + returnTotalLoss(r), 0);
+    const mReturnQty = mReturns.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+    const mTotalExpenses = mExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+    const mProfitAfterReturns = mGrossProfit - mReturnLoss;
+    const mNetProfit = mProfitAfterReturns - mTotalExpenses;
+    const mMargin = mSales > 0 ? (mNetProfit / mSales) * 100 : 0;
+
+    return {
+      label: monthNames[i],
+      fullLabel: monthFullNames[i] + " " + reportYear,
+      monthKey: mKey,
+      value: mNetProfit,
+      bags: mBags,
+      sales: mSales,
+      grossProfit: mGrossProfit,
+      returnLoss: mReturnLoss,
+      returnQty: mReturnQty,
+      expenses: mTotalExpenses,
+      netProfit: mNetProfit,
+      margin: mMargin,
+    };
+  });
+
+  const yearTotalBags = monthlyProfitData.reduce((s, m) => s + m.bags, 0);
+  const yearTotalSales = monthlyProfitData.reduce((s, m) => s + m.sales, 0);
+  const yearTotalGrossProfit = monthlyProfitData.reduce((s, m) => s + m.grossProfit, 0);
+  const yearTotalReturnLoss = monthlyProfitData.reduce((s, m) => s + m.returnLoss, 0);
+  const yearTotalExpenses = monthlyProfitData.reduce((s, m) => s + m.expenses, 0);
+  const yearTotalNetProfit = monthlyProfitData.reduce((s, m) => s + m.netProfit, 0);
+  const yearAvgMargin = yearTotalSales > 0 ? (yearTotalNetProfit / yearTotalSales) * 100 : 0;
+
+  const profitChart = renderSvgProfitBarChart(
+    monthlyProfitData,
+    `12-Month Net Monthly Profit · ${reportYear}`,
+    `${categoryId==="all" ? "All Categories" : (state.categories.find(c=>c.id===categoryId)?.name||"Selected category")} · Net profit in ${CURRENCY}`
+  );
+
+  return `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="chip-row" style="margin-top:0;">
+        <button class="btn btn-ghost btn-sm" data-preset="today">Today</button>
+        <button class="btn btn-ghost btn-sm" data-preset="week">This Week</button>
+        <button class="btn btn-ghost btn-sm" data-preset="month">This Month</button>
+        <button class="btn btn-ghost btn-sm" data-preset="all">All Time</button>
+      </div>
+      <div class="form-grid" style="margin-top:14px;">
+        <div class="field"><label>From</label><input type="date" id="rpStart" value="${start}"></div>
+        <div class="field"><label>To</label><input type="date" id="rpEnd" value="${end}"></div>
+        <div class="field"><label>Profit report year</label>
+          <select id="rpYear">
+            ${availableYears.map(y=>`<option value="${y}" ${reportYear===y?"selected":""}>${y}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>Bag category</label>
+          <select id="rpCategory">
+            <option value="all" ${categoryId==="all"?"selected":""}>All Categories</option>
+            ${state.categories.map(c=>`<option value="${c.id}" ${categoryId===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid kpi-grid">
+      <div class="card kpi-card">
+        <div class="kpi-label">Bags Sold</div>
+        <div class="kpi-value">${totalBags}</div>
+        <div class="kpi-sub">${orders.length} order${orders.length===1?'':'s'}</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Total Selling Price</div>
+        <div class="kpi-value">${fmt(totalSelling)}</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Gross Profit</div>
+        <div class="kpi-value">${fmt(grossProfit)}</div>
+        <div class="kpi-sub">Before returns</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Returned</div>
+        <div class="kpi-value">${returnQty}</div>
+        <div class="kpi-sub">${returns.length} return${returns.length===1?'':'s'} · loss ${fmt(returnLoss)}</div>
+      </div>
+    </div>
+    <div class="card kpi-card" style="margin-bottom:22px;">
+      <div class="kpi-label">Profit After Returns (${monthOrRangeLabel(start,end)})</div>
+      <div class="kpi-value ${profitAfterReturn>=0?'good':'bad'}" style="font-size:30px;">${fmt(profitAfterReturn)}</div>
+      <div class="kpi-sub">Gross profit − return loss, for ${monthOrRangeLabel(start,end)}${categoryId!=="all" ? " · "+esc(state.categories.find(c=>c.id===categoryId)?.name||"") : ""}</div>
+    </div>
+
+    <div class="section-title" style="font-size:16px;font-weight:600;margin-top:30px;">12-Month Net Monthly Profit Report · Year ${reportYear}</div>
+    <div class="grid kpi-grid" style="margin-bottom:16px;">
+      <div class="card kpi-card">
+        <div class="kpi-label">Annual Net Profit (${reportYear})</div>
+        <div class="kpi-value ${yearTotalNetProfit>=0?'good':'bad'}">${fmt(yearTotalNetProfit)}</div>
+        <div class="kpi-sub">12-month total after expenses & returns</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Annual Sales (${reportYear})</div>
+        <div class="kpi-value">${fmt(yearTotalSales)}</div>
+        <div class="kpi-sub">${yearTotalBags} bags sold across 12 months</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Annual Gross Profit</div>
+        <div class="kpi-value">${fmt(yearTotalGrossProfit)}</div>
+        <div class="kpi-sub">Before operating expenses</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Annual Operating Expenses</div>
+        <div class="kpi-value bad">${fmt(yearTotalExpenses)}</div>
+        <div class="kpi-sub">${state.expenses.filter(e=>(e.date||"").startsWith(reportYear+"-")).length} expense entries in ${reportYear}</div>
+      </div>
+    </div>
+
+    <div class="card chart-card" style="margin-bottom:16px;">
+      ${profitChart}
+    </div>
+
+    <div class="table-wrap" style="margin-bottom:28px;">
+      <table>
+        <thead><tr>
+          <th>Month</th>
+          <th class="num">Bags Sold</th>
+          <th class="num">Total Sales</th>
+          <th class="num">Gross Profit</th>
+          <th class="num">Return Loss</th>
+          <th class="num">Operating Expenses</th>
+          <th class="num">Net Monthly Profit</th>
+          <th class="num">Margin</th>
+        </tr></thead>
+        <tbody>
+          ${monthlyProfitData.map(m=>`
+            <tr>
+              <td class="strong">${esc(m.fullLabel)}</td>
+              <td class="num">${m.bags}</td>
+              <td class="num">${fmt(m.sales)}</td>
+              <td class="num">${fmt(m.grossProfit)}</td>
+              <td class="num" style="${m.returnLoss>0?'color:var(--bad);':''}">${m.returnLoss>0 ? fmt(m.returnLoss) : '—'}</td>
+              <td class="num" style="${m.expenses>0?'color:var(--bad);':''}">${m.expenses>0 ? fmt(m.expenses) : '—'}</td>
+              <td class="num" style="font-weight:600;color:${m.netProfit>=0?'var(--good)':'var(--bad)'}">${fmt(m.netProfit)}</td>
+              <td class="num"><span class="pill ${m.margin>=0?'good':'bad'}">${m.sales>0 ? m.margin.toFixed(1)+'%' : '—'}</span></td>
+            </tr>
+          `).join("")}
+        </tbody>
+        <tfoot>
+          <tr style="background:var(--bg-raised);font-weight:600;border-top:2px solid var(--border);">
+            <td class="strong">Full Year Total (${reportYear})</td>
+            <td class="num">${yearTotalBags}</td>
+            <td class="num">${fmt(yearTotalSales)}</td>
+            <td class="num">${fmt(yearTotalGrossProfit)}</td>
+            <td class="num" style="${yearTotalReturnLoss>0?'color:var(--bad);':''}">${yearTotalReturnLoss>0 ? fmt(yearTotalReturnLoss) : '—'}</td>
+            <td class="num" style="${yearTotalExpenses>0?'color:var(--bad);':''}">${yearTotalExpenses>0 ? fmt(yearTotalExpenses) : '—'}</td>
+            <td class="num" style="font-size:14px;color:${yearTotalNetProfit>=0?'var(--good)':'var(--bad)'}">${fmt(yearTotalNetProfit)}</td>
+            <td class="num"><span class="pill ${yearAvgMargin>=0?'good':'bad'}">${yearTotalSales>0 ? yearAvgMargin.toFixed(1)+'%' : '—'}</span></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="section-title">Category breakdown · ${monthOrRangeLabel(start,end)}</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Bag Category</th><th class="num">Bags Sold</th><th class="num">Total Sales</th>
+          <th class="num">Gross Profit</th><th class="num">Returned</th><th class="num">Profit After Return</th>
+        </tr></thead>
+        <tbody>
+          ${catRows.length ? catRows.map(([name,d])=>{
+            const par = d.profit - d.returnLoss;
+            return `<tr>
+              <td class="strong">${esc(name)}</td>
+              <td class="num">${d.qty}</td>
+              <td class="num">${fmt(d.sales)}</td>
+              <td class="num">${fmt(d.profit)}</td>
+              <td class="num">${d.returnQty}</td>
+              <td class="num" style="color:${par>=0?'var(--good)':'var(--bad)'}">${fmt(par)}</td>
+            </tr>`;
+          }).join("") : `<tr class="empty-row"><td colspan="6">No orders in this period.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function monthOrRangeLabel(start,end){
+  if(start===end) return new Date(start).toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"});
+  return `${new Date(start).toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${new Date(end).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}`;
+}
+
+/* ============================================================
+   MODULE 4 — INCOME & EXPENSES
+   ============================================================ */
+function renderFinance(){
+  const incRows = [...state.income].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+  const expRows = [...state.expenses].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+  return `
+    <div class="two-col">
+      <div>
+        <div class="card form-card">
+          <h3 style="margin-bottom:14px;font-size:15px;">Add income</h3>
+          <form id="incomeForm" class="form-grid">
+            <div class="field"><label>Date</label><input name="date" type="date" value="${todayStr()}" required></div>
+            <div class="field"><label>Income type</label>
+              <select name="type" required>${state.incomeTypes.map(t=>`<option>${esc(t)}</option>`).join("")}</select>
+            </div>
+            <div class="field" style="grid-column: 1/-1"><label>Description</label><input name="desc" placeholder="Optional note"></div>
+            <div class="field"><label>Amount (${CURRENCY})</label><input name="amount" type="number" step="0.01" min="0" required></div>
+          </form>
+          <div style="margin-top:10px">
+            <input id="newIncomeType" placeholder="Add custom income type…" style="background:var(--bg-raised);border:1px solid var(--border);color:var(--text);padding:7px 9px;border-radius:6px;font-size:12.5px;width:65%">
+            <button class="btn btn-ghost btn-sm" id="addIncomeType">Add type</button>
+          </div>
+          <div class="form-actions"><button class="btn btn-primary" id="incomeSubmit">${iconPlus()} Add income</button></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+            <tbody>
+              ${incRows.length ? incRows.map(i=>`
+                <tr><td>${i.date}</td><td>${esc(i.type)}</td><td>${esc(i.desc||"—")}</td>
+                <td class="num" style="color:var(--good)">${fmt(i.amount)}</td>
+                <td><button class="icon-btn" data-del-income="${i.id}">${iconTrash()}</button></td></tr>
+              `).join("") : `<tr class="empty-row"><td colspan="5">No extra income logged yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <div class="card form-card">
+          <h3 style="margin-bottom:14px;font-size:15px;">Add expense</h3>
+          <form id="expenseForm" class="form-grid">
+            <div class="field"><label>Date</label><input name="date" type="date" value="${todayStr()}" required></div>
+            <div class="field"><label>Expense type</label>
+              <select name="type" required>${state.expenseTypes.map(t=>`<option>${esc(t)}</option>`).join("")}</select>
+            </div>
+            <div class="field" style="grid-column: 1/-1"><label>Description</label><input name="desc" placeholder="Optional note"></div>
+            <div class="field"><label>Amount (${CURRENCY})</label><input name="amount" type="number" step="0.01" min="0" required></div>
+          </form>
+          <div style="margin-top:10px">
+            <input id="newExpenseType" placeholder="Add custom expense type…" style="background:var(--bg-raised);border:1px solid var(--border);color:var(--text);padding:7px 9px;border-radius:6px;font-size:12.5px;width:65%">
+            <button class="btn btn-ghost btn-sm" id="addExpenseType">Add type</button>
+          </div>
+          <div class="form-actions"><button class="btn btn-primary" id="expenseSubmit">${iconPlus()} Add expense</button></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+            <tbody>
+              ${expRows.length ? expRows.map(e=>`
+                <tr><td>${e.date}</td><td>${esc(e.type)}</td><td>${esc(e.desc||"—")}</td>
+                <td class="num" style="color:var(--bad)">${fmt(e.amount)}</td>
+                <td><button class="icon-btn" data-del-expense="${e.id}">${iconTrash()}</button></td></tr>
+              `).join("") : `<tr class="empty-row"><td colspan="5">No expenses logged yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   MODULE 5 — TAILOR MANAGEMENT & BAG ASSIGNMENT
+   ============================================================ */
+function renderTailors(){
+  const allDates = [
+    ...(state.assignments||[]).map(a => a.date || a.month),
+    ...(state.payments||[]).map(p => p.date || p.month),
+    ...(state.completions||[]).map(c => c.date || c.month)
+  ].filter(Boolean);
+  
+  const detectedMonths = Array.from(new Set(allDates.map(d => (d||"").slice(0,7)))).filter(Boolean).sort().reverse();
+  const currentMo = todayStr().slice(0,7);
+  if(!detectedMonths.includes(currentMo)) detectedMonths.unshift(currentMo);
+  
+  const selectedMonth = tailorFilterState.month || "all";
+  const selectedStatus = tailorFilterState.status || "all";
+  const searchQuery = (tailorFilterState.search || "").trim().toLowerCase();
+
+  // Filter tailors by status and search
+  const filteredTailors = (state.tailors||[]).filter((t, idx) => {
+    const code = getTailorCode(t, idx).toLowerCase();
+    const name = (t.name||"").toLowerCase();
+    const contact = (t.contact||"").toLowerCase();
+    const matchesSearch = !searchQuery || name.includes(searchQuery) || code.includes(searchQuery) || contact.includes(searchQuery);
+    const matchesStatus = selectedStatus === "all" || (t.status || "Active") === selectedStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate global summary in selected view
+  const activeTailorCount = (state.tailors||[]).filter(t => (t.status||"Active") === "Active").length;
+  
+  let totalAssignedInView = 0;
+  let totalCompletedInView = 0;
+  let totalEarnedInView = 0;
+  let totalPaidInView = 0;
+
+  (state.tailors||[]).forEach(t => {
+    const stats = getTailorStats(t.id, selectedMonth);
+    totalAssignedInView += stats.totalAssigned;
+    totalCompletedInView += stats.totalCompleted;
+    totalEarnedInView += stats.totalEarned;
+    totalPaidInView += stats.totalPaid;
+  });
+
+  const totalInProgressInView = Math.max(0, totalAssignedInView - totalCompletedInView);
+  const netBalanceOwed = (state.tailors||[]).reduce((sum, t) => sum + getTailorStats(t.id, "all").balance, 0);
+
+  // Filter completed deliveries log
+  const filteredCompletions = (state.completions||[]).filter(c => {
+    const matchesMonth = selectedMonth === "all" || (c.month || (c.date||"").slice(0,7)) === selectedMonth;
+    const tailor = (state.tailors||[]).find(t => t.id === c.tailorId);
+    const matchesStatus = selectedStatus === "all" || (tailor && (tailor.status||"Active") === selectedStatus);
+    const matchesSearch = !searchQuery || (tailor && (tailor.name.toLowerCase().includes(searchQuery) || getTailorCode(tailor).toLowerCase().includes(searchQuery)));
+    return matchesMonth && matchesStatus && matchesSearch;
+  }).sort((a, b) => (b.date||"").localeCompare(a.date||"") || (b.createdAt||"").localeCompare(a.createdAt||""));
+
+  // Filter assignments for the production orders table
+  const filteredAssignments = (state.assignments||[]).filter(a => {
+    const matchesMonth = selectedMonth === "all" || (a.month || (a.date||"").slice(0,7)) === selectedMonth;
+    const tailor = (state.tailors||[]).find(t => t.id === a.tailorId);
+    const matchesStatus = selectedStatus === "all" || (tailor && (tailor.status||"Active") === selectedStatus);
+    const matchesSearch = !searchQuery || (tailor && (tailor.name.toLowerCase().includes(searchQuery) || getTailorCode(tailor).toLowerCase().includes(searchQuery)));
+    return matchesMonth && matchesStatus && matchesSearch;
+  }).sort((a, b) => (b.date||"").localeCompare(a.date||"") || (b.createdAt||"").localeCompare(a.createdAt||""));
+
+  const monthOptionsHtml = detectedMonths.map(m => `
+    <option value="${m}" ${selectedMonth===m?'selected':''}>${monthLabel(m)} (${m})</option>
+  `).join("");
+
+  return `
+    <div class="card analytics-filter-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+        <div>
+          <h3 style="font-size:18px;margin:0;">Tailor Management &amp; Bag Assignment</h3>
+          <p style="font-size:12.5px;color:var(--text-faint);margin:3px 0 0;">Assign bags by category &amp; colour, log finished orders to reduce remaining bags, and track payments.</p>
+        </div>
+        <div class="action-row-btns">
+          <button class="btn btn-primary" id="btnOpenAddTailor">${iconPlus()} Add Tailor</button>
+          <button class="btn btn-primary" id="btnOpenAssignBags" ${(state.tailors.length && state.categories.length) ? '' : 'disabled style="opacity:0.6;cursor:not-allowed;"'}>${iconNeedle()} Assign Bags</button>
+          <button class="btn btn-primary" id="btnOpenLogCompletion" style="background:var(--good);border-color:var(--good);" ${state.tailors.length ? '' : 'disabled style="opacity:0.6;cursor:not-allowed;"'}>${iconCheckCircle()} Log Completed Bags</button>
+          <button class="btn btn-ghost" id="btnOpenPayment" ${state.tailors.length ? '' : 'disabled style="opacity:0.6;cursor:not-allowed;"'}>${iconCoin()} Record Payment</button>
+          <button class="btn btn-ghost" id="btnOpenColors">${iconPalette()} Colours (${getAllColors().length})</button>
+        </div>
+      </div>
+
+      <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+        <div class="field">
+          <label>Month Filter (Carry-forward &amp; History)</label>
+          <select id="tailorMonthFilter">
+            <option value="all" ${selectedMonth==="all"?'selected':''}>All Time (Lifetime Cumulative)</option>
+            ${monthOptionsHtml}
+          </select>
+        </div>
+        <div class="field">
+          <label>Tailor Status</label>
+          <select id="tailorStatusFilter">
+            <option value="all" ${selectedStatus==="all"?'selected':''}>All Statuses</option>
+            <option value="Active" ${selectedStatus==="Active"?'selected':''}>Active Tailors Only</option>
+            <option value="Inactive" ${selectedStatus==="Inactive"?'selected':''}>Inactive Tailors Only</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Search Tailor</label>
+          <input id="tailorSearchInput" placeholder="Search by name or ID…" value="${esc(tailorFilterState.search||"")}">
+        </div>
+      </div>
+    </div>
+
+    <div class="grid kpi-grid">
+      <div class="card kpi-card">
+        <div class="kpi-label">Active Tailors</div>
+        <div class="kpi-value">${activeTailorCount} <span style="font-size:14px;color:var(--text-faint);font-weight:normal;">/ ${(state.tailors||[]).length} total</span></div>
+        <div class="kpi-sub">${(state.assignments||[]).length} assignments · ${(state.completions||[]).length} completed batches</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Total Assigned Bags</div>
+        <div class="kpi-value">${totalAssignedInView}</div>
+        <div class="kpi-sub">${selectedMonth==="all" ? "All time assignments" : monthLabel(selectedMonth)}</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Completed vs Remaining In Progress</div>
+        <div class="kpi-value good">${totalCompletedInView} <span style="font-size:16px;color:#92400E;font-weight:normal;">(${totalInProgressInView} remaining)</span></div>
+        <div class="kpi-sub">Remaining bags reduce as completions are logged (${totalAssignedInView>0 ? Math.round((totalCompletedInView/totalAssignedInView)*100) : 0}% done)</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Total Payment Needed (Earned)</div>
+        <div class="kpi-value">${fmt(totalEarnedInView)}</div>
+        <div class="kpi-sub" style="color:${netBalanceOwed>0?'var(--bad)':'var(--good)'}">Done Payment: ${fmt(totalPaidInView)} · Balance Owed: ${fmt(netBalanceOwed)}</div>
+      </div>
+    </div>
+
+    <!-- TAILORS DIRECTORY -->
+    <div class="section-title">
+      <span>Tailors Summary &amp; Balances (${filteredTailors.length})</span>
+    </div>
+
+    <div class="table-wrap" style="margin-bottom:28px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Tailor ID &amp; Name</th>
+            <th>Contact / Address</th>
+            <th>Status</th>
+            <th class="num">Assigned</th>
+            <th class="num">Completed</th>
+            <th class="num">Remaining (In Progress)</th>
+            <th class="num">Total Payment to Do</th>
+            <th class="num">Done Payment</th>
+            <th class="num">Balance Owed</th>
+            <th style="text-align:center;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredTailors.length ? filteredTailors.map((t, idx) => {
+            const code = getTailorCode(t, idx);
+            const stats = getTailorStats(t.id, selectedMonth);
+            const status = t.status || "Active";
+            return `
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="tailor-badge-id">${code}</span>
+                    <strong style="color:var(--text);font-size:14px;">${esc(t.name)}</strong>
+                  </div>
+                  ${t.notes ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">${esc(t.notes)}</div>` : ''}
+                </td>
+                <td>
+                  <div style="font-size:12.5px;color:var(--text);">${esc(t.contact || '—')}</div>
+                  ${t.address ? `<div style="font-size:11px;color:var(--text-faint);">${esc(t.address)}</div>` : ''}
+                </td>
+                <td>
+                  <span class="status-pill ${status.toLowerCase()}">${status}</span>
+                </td>
+                <td class="num strong">${stats.totalAssigned}</td>
+                <td class="num" style="color:var(--good);font-weight:600;">${stats.totalCompleted}</td>
+                <td class="num">
+                  <span class="progress-pill ${stats.inProgress>0 ? 'pending' : 'done'}">${stats.inProgress}</span>
+                </td>
+                <td class="num strong">${fmt(stats.totalEarned)}</td>
+                <td class="num" style="color:var(--good);">${fmt(stats.totalPaid)}</td>
+                <td class="num" style="font-weight:600;color:${stats.balance>0 ? 'var(--bad)' : 'var(--good)'}">
+                  ${fmt(stats.balance)}
+                </td>
+                <td>
+                  <div class="row-actions" style="justify-content:center;">
+                    <button class="btn btn-sm btn-primary" data-quick-complete="${t.id}" title="Log Completed Bags for ${esc(t.name)}" style="background:var(--good);border-color:var(--good);padding:4px 8px;font-size:12px;">
+                      ${iconCheckCircle()} Log Done
+                    </button>
+                    <button class="btn btn-sm btn-ghost" data-quick-assign="${t.id}" title="Assign Bags to ${esc(t.name)}">
+                      ${iconNeedle()} Assign
+                    </button>
+                    <button class="btn btn-sm btn-ghost" data-view-tailor="${t.id}" title="View History &amp; Ledger">
+                      ${iconEye()} History
+                    </button>
+                    <button class="icon-btn" data-edit-tailor="${t.id}" title="Edit Tailor Profile">
+                      ${iconEdit()}
+                    </button>
+                    <button class="icon-btn" data-toggle-tailor-status="${t.id}" title="Toggle Active/Inactive">
+                      ${iconPower()}
+                    </button>
+                    <button class="icon-btn" data-del-tailor="${t.id}" title="Delete Tailor">
+                      ${iconTrash()}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join("") : `
+            <tr class="empty-row">
+              <td colspan="10">
+                ${(state.tailors||[]).length ? 'No tailors match your search or filter.' : 'No tailors registered yet. Click "+ Add Tailor" above.'}
+              </td>
+            </tr>
+          `}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- COMPLETED BAGS RECEIVED LOG -->
+    <div class="section-title">
+      <span>Completed Bags Received Log (${filteredCompletions.length})</span>
+    </div>
+
+    <div class="table-wrap" style="margin-bottom:28px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Log ID</th>
+            <th>Date Received</th>
+            <th>Tailor</th>
+            <th>Bag Category &amp; Colour</th>
+            <th class="num">Completed Qty</th>
+            <th class="num">Stitching Rate / Bag</th>
+            <th class="num">Wages Earned (Batch)</th>
+            <th>Notes / Reference</th>
+            <th style="text-align:center;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredCompletions.length ? filteredCompletions.map(c => {
+            const tailor = (state.tailors||[]).find(t => t.id === c.tailorId);
+            const cat = (state.categories||[]).find(catItem => catItem.id === c.categoryId);
+            return `
+              <tr>
+                <td><span class="tailor-badge-id">${esc(c.id)}</span></td>
+                <td>${esc(c.date || c.createdAt?.slice(0,10) || '—')}</td>
+                <td><strong style="color:var(--text);">${tailor ? esc(tailor.name) : '<span style="color:var(--bad)">Deleted tailor</span>'}</strong></td>
+                <td>
+                  <div style="font-weight:600;color:var(--text);">${cat ? esc(cat.name) : '<span style="color:var(--bad)">Deleted category</span>'}</div>
+                  ${c.color ? `<span class="pill" style="font-size:10.5px;padding:1px 7px;margin-top:2px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);display:inline-block;font-weight:500;">${esc(c.color)}</span>` : ''}
+                </td>
+                <td class="num strong" style="color:var(--good);">${c.qty}</td>
+                <td class="num">${fmt(c.rate)}</td>
+                <td class="num strong" style="color:var(--good);">${fmt(c.earnedAmount || (c.qty * c.rate))}</td>
+                <td>${esc(c.notes || '—')}</td>
+                <td style="text-align:center;">
+                  <button class="icon-btn" data-del-completion="${c.id}" title="Delete this completion log and restore remaining bags">${iconTrash()}</button>
+                </td>
+              </tr>
+            `;
+          }).join("") : `
+            <tr class="empty-row">
+              <td colspan="9">
+                ${(state.completions||[]).length ? 'No completed bags logged for this filter period.' : 'No completed bags logged yet. Click "✅ Log Completed Bags" above when a tailor finishes bags.'}
+              </td>
+            </tr>
+          `}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ASSIGNMENTS PRODUCTION LOG -->
+    <div class="section-title">
+      <span>Bag Assignments &amp; Production Orders (${filteredAssignments.length})</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Assignment ID</th>
+            <th>Date</th>
+            <th>Tailor</th>
+            <th>Category &amp; Colour</th>
+            <th class="num">Assigned</th>
+            <th class="num">Completed</th>
+            <th class="num">Remaining (In Progress)</th>
+            <th class="num">Rate / Bag</th>
+            <th class="num">Earned Amount</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filteredAssignments.length ? filteredAssignments.map(a => {
+            const tailor = (state.tailors||[]).find(t => t.id === a.tailorId);
+            const cat = (state.categories||[]).find(c => c.id === a.categoryId);
+            const assigned = Number(a.assignedQty)||0;
+            const completed = Number(a.completedQty)||0;
+            const inProgress = Math.max(0, assigned - completed);
+            const rate = Number(a.rate)||0;
+            const earned = completed * rate;
+            const isDone = completed >= assigned;
+            return `
+              <tr>
+                <td><span class="tailor-badge-id">${esc(a.id || 'ASN')}</span></td>
+                <td>${esc(a.date || a.createdAt?.slice(0,10) || '—')}</td>
+                <td>
+                  <strong style="color:var(--text);">${tailor ? esc(tailor.name) : '<span style="color:var(--bad)">Deleted tailor</span>'}</strong>
+                </td>
+                <td>
+                  <div style="font-weight:600;color:var(--text);">${cat ? esc(cat.name) : '<span style="color:var(--bad)">Deleted category</span>'}</div>
+                  ${a.color ? `<span class="pill" style="font-size:10.5px;padding:1px 7px;margin-top:2px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);display:inline-block;font-weight:500;">${esc(a.color)}</span>` : ''}
+                </td>
+                <td class="num strong">${assigned}</td>
+                <td class="num" style="color:var(--good);font-weight:600;">${completed}</td>
+                <td class="num">
+                  <span class="progress-pill ${inProgress>0 ? 'pending' : 'done'}">${inProgress}</span>
+                </td>
+                <td class="num">${fmt(rate)}</td>
+                <td class="num" style="color:var(--good);font-weight:600;">${fmt(earned)}</td>
+                <td>
+                  <span class="progress-pill ${isDone ? 'done' : 'pending'}">${isDone ? 'Completed' : 'In Progress'}</span>
+                </td>
+                <td>
+                  <button class="icon-btn" data-del-assign="${a.id}" title="Delete Assignment">${iconTrash()}</button>
+                </td>
+              </tr>
+            `;
+          }).join("") : `
+            <tr class="empty-row">
+              <td colspan="11">
+                ${(state.assignments||[]).length ? 'No bag assignments logged for this period.' : 'No bag assignments yet. Click "+ Assign Bags" to create one.'}
+              </td>
+            </tr>
+          `}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* Modals */
+function openLogCompletionModal(preselectedTailorId = ""){
+  if(!state.tailors.length){ toast("Please add a tailor first."); return; }
+  
+  const tailorOptions = state.tailors.map((t, idx) => `
+    <option value="${t.id}" ${t.id===preselectedTailorId?'selected':''}>${getTailorCode(t, idx)} — ${esc(t.name)} (${t.status||'Active'})</option>
+  `).join("");
+
+  showModal(`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="color:var(--good);">${iconCheckCircle()}</span>
+      <h3 style="margin:0;">Log Completed Bags / Finished Work</h3>
+    </div>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:14px;">
+      Record finished bags returned by the tailor. This will automatically reduce the tailor's remaining assigned bags, update completion reports, and calculate wages earned.
+    </p>
+
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+      <div class="field">
+        <label>Tailor *</label>
+        <select id="compTailorSelect" required>${tailorOptions}</select>
+      </div>
+      <div class="field">
+        <label>Completion / Receiving Date *</label>
+        <input type="date" id="compDate" value="${todayStr()}" required>
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>Notes / Delivery Reference (Optional)</label>
+        <input id="compNotes" placeholder="e.g. Delivered batch #1 to warehouse">
+      </div>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:12px 0 8px;">Active Assigned Bags for Selected Tailor</div>
+    
+    <div class="table-wrap" style="max-height:240px;overflow-y:auto;border:1px solid var(--border-soft);border-radius:var(--radius-sm);margin-bottom:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Bag Category &amp; Colour</th>
+            <th class="num">Assigned</th>
+            <th class="num">Done So Far</th>
+            <th class="num">Remaining</th>
+            <th class="num" style="min-width:140px;text-align:right;">Completed Now *</th>
+            <th class="num">Rate / Bag</th>
+            <th class="num">Earned Wages</th>
+          </tr>
+        </thead>
+        <tbody id="compItemsTbody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px;">
+      <div style="font-size:12px;color:var(--text-faint);">
+        Tip: Enter the number of finished bags for each category/colour.
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--good);" id="compSummaryReadout">
+        Logging 0 Bags · New Payment to Do: ${fmt(0)}
+      </div>
+    </div>
+
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSubmitLogCompletion" style="background:var(--good);border-color:var(--good);">${iconCheckCircle()} Confirm &amp; Log Completed Bags</button>
+    </div>
+  `, "modal-lg");
+
+  const tailorSel = document.getElementById("compTailorSelect");
+  const tbody = document.getElementById("compItemsTbody");
+  const readout = document.getElementById("compSummaryReadout");
+
+  const renderActiveItems = ()=>{
+    const tId = tailorSel.value;
+    const assigns = (state.assignments||[]).filter(a => a.tailorId === tId && (Number(a.assignedQty)||0) > (Number(a.completedQty)||0));
+    
+    if(!assigns.length){
+      tbody.innerHTML = `
+        <tr class="empty-row">
+          <td colspan="7" style="padding:20px;text-align:center;color:var(--text-faint);">
+            This tailor currently has no pending bag assignments in progress.
+            <div style="margin-top:8px;">
+              <button type="button" class="btn btn-sm btn-ghost" id="btnCompQuickAssign">${iconNeedle()} Assign Bags to this Tailor First</button>
+            </div>
+          </td>
+        </tr>
+      `;
+      const quickAssignBtn = document.getElementById("btnCompQuickAssign");
+      if(quickAssignBtn){
+        quickAssignBtn.addEventListener("click", ()=> openAssignModal(tId));
+      }
+      updateSummary();
+      return;
+    }
+
+    tbody.innerHTML = assigns.map(a => {
+      const cat = (state.categories||[]).find(c => c.id === a.categoryId);
+      const assigned = Number(a.assignedQty)||0;
+      const completed = Number(a.completedQty)||0;
+      const remaining = Math.max(0, assigned - completed);
+      const rate = Number(a.rate)||0;
+
+      return `
+        <tr class="comp-item-row" data-assign-id="${a.id}" data-rate="${rate}" data-max="${remaining}">
+          <td>
+            <div style="font-weight:600;color:var(--text);">${cat ? esc(cat.name) : '—'}</div>
+            ${a.color ? `<span class="pill" style="font-size:10.5px;padding:1px 7px;margin-top:2px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);display:inline-block;font-weight:500;">${esc(a.color)}</span>` : ''}
+          </td>
+          <td class="num">${assigned}</td>
+          <td class="num" style="color:var(--good);">${completed}</td>
+          <td class="num"><span class="progress-pill pending">${remaining}</span></td>
+          <td class="num">
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
+              <input type="number" min="0" max="${remaining}" value="0" class="row-comp-now"
+                style="width:65px;background:var(--bg-raised);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:3px 6px;font-size:13px;text-align:right;">
+              <button type="button" class="btn btn-sm btn-ghost row-btn-all" style="padding:2px 6px;font-size:10px;" title="Fill all remaining">All</button>
+            </div>
+          </td>
+          <td class="num">${fmt(rate)}</td>
+          <td class="num row-earned-val" style="font-weight:600;color:var(--good);">${fmt(0)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    tbody.querySelectorAll(".comp-item-row").forEach(tr => {
+      const inp = tr.querySelector(".row-comp-now");
+      const btnAll = tr.querySelector(".row-btn-all");
+      const max = Number(tr.dataset.max)||0;
+      const rate = Number(tr.dataset.rate)||0;
+      const earnedSpan = tr.querySelector(".row-earned-val");
+
+      const updateRow = ()=>{
+        let val = Math.max(0, Math.min(Number(inp.value)||0, max));
+        inp.value = val;
+        earnedSpan.textContent = fmt(val * rate);
+        updateSummary();
+      };
+
+      inp.addEventListener("input", updateRow);
+      if(btnAll){
+        btnAll.addEventListener("click", ()=>{
+          inp.value = max;
+          updateRow();
+        });
+      }
+    });
+
+    updateSummary();
+  };
+
+  const updateSummary = ()=>{
+    let totalBags = 0;
+    let totalWages = 0;
+    tbody.querySelectorAll(".comp-item-row").forEach(tr => {
+      const q = Number(tr.querySelector(".row-comp-now")?.value)||0;
+      const r = Number(tr.dataset.rate)||0;
+      totalBags += q;
+      totalWages += q * r;
+    });
+    readout.textContent = `Logging ${totalBags} Bag${totalBags===1?'':'s'} · New Payment to Do: ${fmt(totalWages)}`;
+  };
+
+  tailorSel.addEventListener("change", renderActiveItems);
+  renderActiveItems();
+
+  document.getElementById("btnSubmitLogCompletion").addEventListener("click", ()=>{
+    const tailorId = tailorSel.value;
+    const date = document.getElementById("compDate").value || todayStr();
+    const notes = (document.getElementById("compNotes").value||"").trim();
+    const rows = Array.from(tbody.querySelectorAll(".comp-item-row"));
+    
+    let totalLogged = 0;
+    const newCompletions = [];
+
+    for(const tr of rows){
+      const qty = Number(tr.querySelector(".row-comp-now").value)||0;
+      if(qty > 0){
+        const assignId = tr.dataset.assignId;
+        const rate = Number(tr.dataset.rate)||0;
+        const assign = (state.assignments||[]).find(a => a.id === assignId);
+        if(assign){
+          assign.completedQty = Math.min(Number(assign.assignedQty)||0, (Number(assign.completedQty)||0) + qty);
+          assign.updatedAt = new Date().toISOString();
+          
+          newCompletions.push({
+            id: "CMP-" + Math.random().toString(36).slice(2, 7).toUpperCase(),
+            assignmentId: assign.id,
+            tailorId: assign.tailorId,
+            date,
+            month: date.slice(0,7),
+            categoryId: assign.categoryId,
+            color: assign.color,
+            qty,
+            rate,
+            earnedAmount: qty * rate,
+            notes,
+            createdAt: new Date().toISOString()
+          });
+          totalLogged += qty;
+        }
+      }
+    }
+
+    if(totalLogged <= 0){
+      toast("Please enter at least 1 completed bag to log.");
+      return;
+    }
+
+    if(!Array.isArray(state.completions)) state.completions = [];
+    state.completions.push(...newCompletions);
+    saveState();
+    closeModal();
+    toast(`Successfully logged ${totalLogged} completed bag(s)! Remaining assigned bags updated.`);
+    render();
+  });
+}
+
+function openTailorModal(tailor = null){
+  const isEdit = !!tailor;
+  showModal(`
+    <h3>${isEdit ? 'Edit Tailor Profile' : 'Add New Tailor'}</h3>
+    <form id="tailorModalForm" class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+      <div class="field" style="grid-column:1/-1;">
+        <label>Tailor Name *</label>
+        <input name="name" id="tmName" value="${isEdit?esc(tailor.name):''}" placeholder="e.g. Kamal" required>
+      </div>
+      <div class="field">
+        <label>Contact Number</label>
+        <input name="contact" id="tmContact" value="${isEdit?esc(tailor.contact||''):''}" placeholder="e.g. 0771234567">
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select name="status" id="tmStatus">
+          <option value="Active" ${(!isEdit || tailor.status==="Active")?'selected':''}>Active</option>
+          <option value="Inactive" ${(isEdit && tailor.status==="Inactive")?'selected':''}>Inactive</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>Address</label>
+        <input name="address" id="tmAddress" value="${isEdit?esc(tailor.address||''):''}" placeholder="e.g. Workshop #4, Colombo">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>Notes</label>
+        <input name="notes" id="tmNotes" value="${isEdit?esc(tailor.notes||''):''}" placeholder="e.g. Specializes in Crocodile and PU bags">
+      </div>
+    </form>
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="saveTailorModalBtn">${isEdit ? 'Save Changes' : 'Add Tailor'}</button>
+    </div>
+  `, "modal-md");
+
+  document.getElementById("saveTailorModalBtn").addEventListener("click", (e)=>{
+    e.preventDefault();
+    const form = document.getElementById("tailorModalForm");
+    if(!form.reportValidity()) return;
+    const name = document.getElementById("tmName").value.trim();
+    if(!name) return;
+    const contact = document.getElementById("tmContact").value.trim();
+    const status = document.getElementById("tmStatus").value || "Active";
+    const address = document.getElementById("tmAddress").value.trim();
+    const notes = document.getElementById("tmNotes").value.trim();
+
+    if(isEdit){
+      tailor.name = name;
+      tailor.contact = contact;
+      tailor.status = status;
+      tailor.address = address;
+      tailor.notes = notes;
+      tailor.updatedAt = new Date().toISOString();
+      saveState(); closeModal(); toast("Tailor updated"); render();
+    } else {
+      const newTailor = {
+        id: "t_" + uid(),
+        code: "T-" + String((state.tailors||[]).length + 1).padStart(3, "0"),
+        name,
+        contact,
+        status,
+        address,
+        notes,
+        createdAt: new Date().toISOString()
+      };
+      state.tailors.push(newTailor);
+      saveState(); closeModal(); toast("Tailor added"); render();
+    }
+  });
+}
+
+function openColorsModal(){
+  const colors = getAllColors();
+  showModal(`
+    <h3>Colours Library</h3>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:14px;">Manage global colours available for bag categories and tailor work assignments.</p>
+    
+    <div class="field" style="margin-bottom:14px;">
+      <label>Add New Colour</label>
+      <div style="display:flex;gap:8px;">
+        <input id="newGlobalColorInput" placeholder="e.g. Olive Green, Rose Gold" style="flex:1;background:var(--bg-raised);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:var(--radius-sm);font-size:13.5px;">
+        <button class="btn btn-primary btn-sm" id="btnAddGlobalColor">${iconPlus()} Add Colour</button>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-faint);margin-bottom:6px;">Current Colours (${colors.length})</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow-y:auto;padding:10px;background:var(--bg-raised);border:1px solid var(--border-soft);border-radius:var(--radius-sm);">
+      ${colors.map(col => `
+        <span class="chip" style="font-size:12px;padding:4px 9px;">
+          ${esc(col)}
+          <button type="button" data-del-global-color="${esc(col)}" title="Remove colour">&times;</button>
+        </span>
+      `).join("")}
+    </div>
+
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="closeModal()">Done</button>
+    </div>
+  `, "modal-md");
+
+  document.getElementById("btnAddGlobalColor").addEventListener("click", ()=>{
+    const input = document.getElementById("newGlobalColorInput");
+    const val = (input.value||"").trim();
+    if(val){
+      addGlobalColor(val);
+      toast(`Colour "${val}" added`);
+      openColorsModal();
+    }
+  });
+
+  document.querySelectorAll("[data-del-global-color]").forEach(b => {
+    b.addEventListener("click", ()=>{
+      const col = b.dataset.delGlobalColor;
+      if(Array.isArray(state.colors)){
+        state.colors = state.colors.filter(c => c.toLowerCase() !== col.toLowerCase());
+        saveState();
+        openColorsModal();
+      }
+    });
+  });
+}
+
+function openPaymentModal(preselectedTailorId = ""){
+  if(!state.tailors.length){ toast("Please add a tailor first."); return; }
+  const tailorOptions = state.tailors.map((t, idx) => `
+    <option value="${t.id}" ${t.id===preselectedTailorId?'selected':''}>${getTailorCode(t, idx)} — ${esc(t.name)} (${t.status||'Active'})</option>
+  `).join("");
+
+  showModal(`
+    <h3>Record Tailor Payment</h3>
+    <form id="recordPaymentForm" class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+      <div class="field"><label>Payment Date *</label><input type="date" id="payDate" value="${todayStr()}" required></div>
+      <div class="field"><label>Tailor *</label><select id="payTailorId" required>${tailorOptions}</select></div>
+      <div class="field" style="grid-column:1/-1;"><label>Amount Paid (${CURRENCY}) *</label><input type="number" step="0.01" min="0.01" id="payAmount" placeholder="0.00" required></div>
+      <div class="field" style="grid-column:1/-1;"><label>Notes / Voucher / Reference</label><input id="payNotes" placeholder="Optional notes…"></div>
+    </form>
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSubmitPayment">${iconCoin()} Save Payment</button>
+    </div>
+  `, "modal-md");
+
+  document.getElementById("btnSubmitPayment").addEventListener("click", (e)=>{
+    e.preventDefault();
+    const date = document.getElementById("payDate").value || todayStr();
+    const tailorId = document.getElementById("payTailorId").value;
+    const amount = Number(document.getElementById("payAmount").value)||0;
+    const notes = (document.getElementById("payNotes").value||"").trim();
+    if(!tailorId || amount <= 0){
+      toast("Please provide tailor and a valid payment amount.");
+      return;
+    }
+    state.payments.push({
+      id: "PAY-" + uid(),
+      date,
+      month: date.slice(0,7),
+      tailorId,
+      amount,
+      notes,
+      createdAt: new Date().toISOString()
+    });
+    saveState(); closeModal(); toast("Payment recorded"); render();
+  });
+}
+
+function openAssignModal(preselectedTailorId = ""){
+  if(!state.tailors.length){ toast("Please add a tailor first."); return; }
+  if(!state.categories.length){ toast("Please add at least one bag category first."); return; }
+
+  const tailorOptions = state.tailors.map((t, idx) => `
+    <option value="${t.id}" ${t.id===preselectedTailorId?'selected':''}>${getTailorCode(t, idx)} — ${esc(t.name)} ${t.status==='Inactive'?'(Inactive)':''}</option>
+  `).join("");
+
+  showModal(`
+    <h3>Assign Bags to Tailor</h3>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:12px;">Assign multiple bag categories, colours, and quantities in one batch.</p>
+    
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+      <div class="field"><label>Tailor *</label><select id="batchTailorId" required>${tailorOptions}</select></div>
+      <div class="field"><label>Assignment Date *</label><input type="date" id="batchDate" value="${todayStr()}" required></div>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:14px 0 6px;display:flex;justify-content:space-between;align-items:center;">
+      <span>Bag Assignment Details</span>
+      <button type="button" class="btn btn-sm btn-ghost" id="btnInlineAddColor">${iconPalette()} + New Colour</button>
+    </div>
+
+    <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border-soft);border-radius:var(--radius-sm);">
+      <table class="batch-assign-table">
+        <thead>
+          <tr>
+            <th style="width:28%;">Bag Category *</th>
+            <th style="width:26%;">Colour *</th>
+            <th style="width:18%;text-align:right;">Assigned Qty *</th>
+            <th style="width:20%;text-align:right;">Rate / Bag (${CURRENCY}) *</th>
+            <th style="width:8%;"></th>
+          </tr>
+        </thead>
+        <tbody id="batchRowsBody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btnAddAssignRow">${iconPlus()} Add Bag Assignment</button>
+      <div style="font-size:13px;font-weight:600;color:var(--accent);" id="batchSummaryReadout">Total Assigned: 0 Bags · Est. Value: ${fmt(0)}</div>
+    </div>
+
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSubmitBatchAssign">${iconNeedle()} Confirm &amp; Assign</button>
+    </div>
+  `, "modal-lg");
+
+  const tbody = document.getElementById("batchRowsBody");
+
+  const createRow = (catId = "", color = "", qty = 10, rate = 350)=>{
+    const tr = document.createElement("tr");
+    tr.className = "assign-batch-row";
+
+    const allColors = getAllColors();
+    const catOpts = state.categories.map(c => `<option value="${c.id}" ${c.id===catId?'selected':''}>${esc(c.name)}</option>`).join("");
+    const colorOpts = allColors.map(col => `<option value="${esc(col)}" ${col===color?'selected':''}>${esc(col)}</option>`).join("");
+
+    tr.innerHTML = `
+      <td>
+        <select class="row-cat" required>${catOpts}</select>
+      </td>
+      <td>
+        <select class="row-color" required>${colorOpts}</select>
+      </td>
+      <td>
+        <input type="number" class="row-qty" min="1" value="${qty}" required style="text-align:right;">
+      </td>
+      <td>
+        <input type="number" step="0.01" min="0" class="row-rate" value="${rate}" required style="text-align:right;">
+      </td>
+      <td style="text-align:center;">
+        <button type="button" class="icon-btn row-del-btn" title="Remove row">${iconTrash()}</button>
+      </td>
+    `;
+
+    tr.querySelector(".row-del-btn").addEventListener("click", ()=>{
+      if(tbody.querySelectorAll("tr").length > 1){
+        tr.remove();
+        updateBatchSummary();
+      } else {
+        toast("Must have at least one bag assignment.");
+      }
+    });
+
+    tr.querySelectorAll("input, select").forEach(inp => {
+      inp.addEventListener("input", updateBatchSummary);
+    });
+
+    tbody.appendChild(tr);
+    updateBatchSummary();
+  };
+
+  const updateBatchSummary = ()=>{
+    let totalBags = 0;
+    let totalVal = 0;
+    tbody.querySelectorAll("tr").forEach(tr => {
+      const q = Number(tr.querySelector(".row-qty")?.value)||0;
+      const r = Number(tr.querySelector(".row-rate")?.value)||0;
+      totalBags += q;
+      totalVal += q * r;
+    });
+    const readout = document.getElementById("batchSummaryReadout");
+    if(readout){
+      readout.textContent = `Total Assigned: ${totalBags} Bags · Est. Value: ${fmt(totalVal)}`;
+    }
+  };
+
+  // Add initial row
+  const firstCat = state.categories[0]?.id || "";
+  const firstColors = getCategoryColors(state.categories[0]);
+  const defaultCol = firstColors[0] || getAllColors()[0] || "Black";
+  createRow(firstCat, defaultCol, 10, 350);
+
+  document.getElementById("btnAddAssignRow").addEventListener("click", ()=>{
+    createRow(firstCat, defaultCol, 10, 350);
+  });
+
+  document.getElementById("btnInlineAddColor").addEventListener("click", ()=>{
+    const name = prompt("Enter new colour name:");
+    if(name && name.trim()){
+      addGlobalColor(name.trim());
+      toast(`Colour "${name.trim()}" added`);
+      const allColors = getAllColors();
+      tbody.querySelectorAll(".row-color").forEach(sel => {
+        const cur = sel.value;
+        sel.innerHTML = allColors.map(col => `<option value="${esc(col)}" ${col===cur?'selected':''}>${esc(col)}</option>`).join("");
+      });
+    }
+  });
+
+  document.getElementById("btnSubmitBatchAssign").addEventListener("click", ()=>{
+    const tailorId = document.getElementById("batchTailorId").value;
+    const date = document.getElementById("batchDate").value || todayStr();
+    const rows = tbody.querySelectorAll("tr");
+    if(!tailorId){ toast("Please select a tailor."); return; }
+    if(!rows.length){ toast("Please add at least one bag assignment row."); return; }
+
+    const newAssignments = [];
+    for(const tr of rows){
+      const catId = tr.querySelector(".row-cat").value;
+      const color = tr.querySelector(".row-color").value;
+      const qty = Number(tr.querySelector(".row-qty").value)||0;
+      const rate = Number(tr.querySelector(".row-rate").value)||0;
+      if(qty <= 0){ toast("Quantity must be greater than zero."); return; }
+
+      newAssignments.push({
+        id: "ASN-" + Math.random().toString(36).slice(2, 7).toUpperCase(),
+        tailorId,
+        date,
+        month: date.slice(0,7),
+        year: date.slice(0,4),
+        categoryId: catId,
+        color,
+        assignedQty: qty,
+        completedQty: 0,
+        rate,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    state.assignments.push(...newAssignments);
+    saveState();
+    closeModal();
+    toast(`${newAssignments.length} bag assignment${newAssignments.length===1?'':'s'} saved!`);
+    render();
+  });
+}
+
+function openTailorHistoryModal(tailorId){
+  const tailor = state.tailors.find(t => t.id === tailorId);
+  if(!tailor) return;
+  const idx = state.tailors.findIndex(t => t.id === tailorId);
+  const code = getTailorCode(tailor, idx);
+  const stats = getTailorStats(tailorId, tailorFilterState.month);
+  const allTimeStats = getTailorStats(tailorId, "all");
+
+  showModal(`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="tailor-badge-id">${code}</span>
+          <h3 style="margin:0;font-size:18px;">${esc(tailor.name)}</h3>
+          <span class="status-pill ${(tailor.status||'Active').toLowerCase()}">${tailor.status||'Active'}</span>
+        </div>
+        <p style="color:var(--text-dim);font-size:12px;margin:4px 0 0;">
+          Contact: ${esc(tailor.contact||'—')} · Address: ${esc(tailor.address||'—')}
+        </p>
+      </div>
+      <div class="action-row-btns">
+        <button class="btn btn-sm btn-primary" id="btnHistLogComp" style="background:var(--good);border-color:var(--good);">${iconCheckCircle()} Log Completed Bags</button>
+        <button class="btn btn-sm btn-ghost" id="btnHistAssignMore">${iconNeedle()} Assign Bags</button>
+        <button class="btn btn-sm btn-ghost" id="btnHistPay">${iconCoin()} Pay Tailor</button>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+      <div class="tstat"><div class="n">${allTimeStats.totalAssigned}</div><div class="l">Lifetime Assigned</div></div>
+      <div class="tstat"><div class="n good">${allTimeStats.totalCompleted}</div><div class="l">Lifetime Completed</div></div>
+      <div class="tstat"><div class="n" style="color:#92400E;">${allTimeStats.cumInProgress}</div><div class="l">Remaining (In Progress)</div></div>
+      <div class="tstat"><div class="n">${fmt(allTimeStats.cumEarned)}</div><div class="l">Total Payment to Do (Earned)</div></div>
+      <div class="tstat"><div class="n" style="color:var(--good);">${fmt(allTimeStats.cumPaid)}</div><div class="l">Done Payment (Paid)</div></div>
+      <div class="tstat"><div class="n" style="color:${allTimeStats.balance>0?'var(--bad)':'var(--good)'}">${fmt(allTimeStats.balance)}</div><div class="l">Balance Owed</div></div>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:14px 0 6px;">Completed Bags Received Log (${stats.allCompletions?.length || 0})</div>
+    <div class="table-wrap" style="max-height:180px;overflow-y:auto;border:1px solid var(--border-soft);border-radius:var(--radius-sm);margin-bottom:16px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Log ID</th>
+            <th>Date Received</th>
+            <th>Category &amp; Colour</th>
+            <th class="num">Completed Qty</th>
+            <th class="num">Rate / Bag</th>
+            <th class="num">Wages Earned</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(stats.allCompletions||[]).length ? stats.allCompletions.map(c => {
+            const cat = state.categories.find(x => x.id === c.categoryId);
+            return `
+              <tr>
+                <td><span class="tailor-badge-id">${esc(c.id)}</span></td>
+                <td>${esc(c.date || '—')}</td>
+                <td>
+                  <strong>${cat?esc(cat.name):'—'}</strong>
+                  ${c.color ? `<span class="pill" style="font-size:10px;padding:1px 6px;margin-left:4px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);">${esc(c.color)}</span>` : ''}
+                </td>
+                <td class="num strong" style="color:var(--good);">${c.qty}</td>
+                <td class="num">${fmt(c.rate)}</td>
+                <td class="num strong" style="color:var(--good);">${fmt(c.earnedAmount || (c.qty * c.rate))}</td>
+                <td>${esc(c.notes||'—')}</td>
+                <td>
+                  <button class="icon-btn" data-del-completion="${c.id}" title="Delete completion log">${iconTrash()}</button>
+                </td>
+              </tr>
+            `;
+          }).join("") : `<tr class="empty-row"><td colspan="8">No completed bag deliveries logged for this tailor yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:14px 0 6px;">Bag Assignments &amp; Production Status (${stats.allAssigns.length})</div>
+    <div class="table-wrap" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-soft);border-radius:var(--radius-sm);margin-bottom:16px;">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Date</th>
+            <th>Category &amp; Colour</th>
+            <th class="num">Assigned</th>
+            <th class="num">Completed</th>
+            <th class="num">Remaining</th>
+            <th class="num">Rate</th>
+            <th class="num">Earned</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${stats.allAssigns.length ? stats.allAssigns.map(a => {
+            const cat = state.categories.find(c => c.id === a.categoryId);
+            const assigned = Number(a.assignedQty)||0;
+            const done = Number(a.completedQty)||0;
+            const inProg = Math.max(0, assigned - done);
+            const earned = done * (Number(a.rate)||0);
+            return `
+              <tr>
+                <td><span class="tailor-badge-id">${esc(a.id||'ASN')}</span></td>
+                <td>${esc(a.date || '—')}</td>
+                <td>
+                  <strong>${cat?esc(cat.name):'—'}</strong>
+                  ${a.color ? `<span class="pill" style="font-size:10px;padding:1px 6px;margin-left:4px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);">${esc(a.color)}</span>` : ''}
+                </td>
+                <td class="num strong">${assigned}</td>
+                <td class="num" style="color:var(--good);font-weight:600;">${done}</td>
+                <td class="num"><span class="progress-pill ${inProg>0?'pending':'done'}">${inProg}</span></td>
+                <td class="num">${fmt(a.rate)}</td>
+                <td class="num" style="color:var(--good);font-weight:600;">${fmt(earned)}</td>
+                <td>
+                  <button class="icon-btn" data-del-assign="${a.id}" title="Delete assignment">${iconTrash()}</button>
+                </td>
+              </tr>
+            `;
+          }).join("") : `<tr class="empty-row"><td colspan="9">No assignments found for this tailor.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:14px 0 6px;">Payment Ledger (${stats.allPayments.length})</div>
+    <div class="table-wrap" style="max-height:160px;overflow-y:auto;border:1px solid var(--border-soft);border-radius:var(--radius-sm);">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th class="num">Amount Paid</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${stats.allPayments.length ? stats.allPayments.map(p => `
+            <tr>
+              <td>${esc(p.date)}</td>
+              <td class="num strong" style="color:var(--good);">${fmt(p.amount)}</td>
+              <td>${esc(p.notes||'—')}</td>
+              <td>
+                <button class="icon-btn" data-del-payment="${p.id}" title="Delete payment">${iconTrash()}</button>
+              </td>
+            </tr>
+          `).join("") : `<tr class="empty-row"><td colspan="4">No payments recorded yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="closeModal()">Close</button>
+    </div>
+  `, "modal-lg");
+
+  document.getElementById("btnHistLogComp").addEventListener("click", ()=>{
+    openLogCompletionModal(tailorId);
+  });
+  document.getElementById("btnHistAssignMore").addEventListener("click", ()=>{
+    openAssignModal(tailorId);
+  });
+  document.getElementById("btnHistPay").addEventListener("click", ()=>{
+    openPaymentModal(tailorId);
+  });
+
+  document.querySelectorAll("[data-del-completion]").forEach(b => {
+    b.addEventListener("click", ()=>{
+      deleteCompletion(b.dataset.delCompletion, tailorId);
+    });
+  });
+
+  document.querySelectorAll("[data-del-payment]").forEach(b => {
+    b.addEventListener("click", ()=>{
+      const pid = b.dataset.delPayment;
+      confirmDelete("This payment record will be removed.", ()=>{
+        state.payments = state.payments.filter(p => p.id !== pid);
+        saveState();
+        openTailorHistoryModal(tailorId);
+      });
+    });
+  });
+}
+
+function deleteCompletion(compId, refreshTailorId = null){
+  const comp = (state.completions||[]).find(c => c.id === compId);
+  if(!comp) return;
+  confirmDelete(`This completed delivery of ${comp.qty} bag(s) will be deleted and restored back to remaining in-progress bags.`, ()=>{
+    if(comp.assignmentId){
+      const a = (state.assignments||[]).find(x => x.id === comp.assignmentId);
+      if(a){
+        a.completedQty = Math.max(0, (Number(a.completedQty)||0) - Number(comp.qty));
+        a.updatedAt = new Date().toISOString();
+      }
+    }
+    state.completions = (state.completions||[]).filter(c => c.id !== compId);
+    saveState();
+    toast("Completion record deleted. Remaining bags restored.");
+    if(refreshTailorId){
+      openTailorHistoryModal(refreshTailorId);
+    } else {
+      render();
+    }
+  });
+}
+
+/* ============================================================
+   MODULE — BACKUP / RESTORE
+   ============================================================ */
+function renderData(){
+  const counts = {
+    Categories: state.categories.length, Orders: state.orders.length, Returns: state.returns.length,
+    Income: state.income.length, Expenses: state.expenses.length, Tailors: state.tailors.length,
+  };
+  return `
+    <div class="two-col">
+      <div class="card">
+        <h3 style="font-size:15px;margin-bottom:10px;">Export your data</h3>
+        <p style="color:var(--text-dim);font-size:13.5px;line-height:1.6;margin:0 0 14px;">
+          Download everything as a JSON file. Keep it somewhere safe — Google Drive, Dropbox, email to yourself — since data only lives in this browser otherwise.
+        </p>
+        <button class="btn btn-primary" id="exportBtn">Download backup (.json)</button>
+      </div>
+      <div class="card">
+        <h3 style="font-size:15px;margin-bottom:10px;">Restore from a file</h3>
+        <p style="color:var(--text-dim);font-size:13.5px;line-height:1.6;margin:0 0 14px;">
+          Restoring replaces all current data in this browser with the contents of the file. Export a backup first if you're not sure.
+        </p>
+        <input type="file" id="importFile" accept="application/json" style="display:none;">
+        <button class="btn btn-ghost" id="importBtn">Choose backup file…</button>
+      </div>
+    </div>
+    <div class="section-title">What's stored right now</div>
+    <div class="grid" style="grid-template-columns: repeat(auto-fit,minmax(140px,1fr));">
+      ${Object.entries(counts).map(([k,v])=>`<div class="card"><div class="kpi-label">${k}</div><div class="kpi-value">${v}</div></div>`).join("")}
+    </div>
+    <div class="section-title">Danger zone</div>
+    <div class="card">
+      <p style="color:var(--text-dim);font-size:13.5px;margin:0 0 14px;">Erase all data stored in this browser. This cannot be undone — export a backup first.</p>
+      <button class="btn btn-danger" id="wipeBtn">Erase all data</button>
+    </div>
+  `;
+}
+
+/* ============================================================
+   EVENT BINDING
+   ============================================================ */
+function bindTabEvents(){
+  if(currentTab === "dashboard"){
+    const month = document.getElementById("dashMonth");
+    const year = document.getElementById("dashYear");
+    const category = document.getElementById("dashCategory");
+    const status = document.getElementById("dashStatus");
+    if(month) month.addEventListener("change", ()=>{ dashboardState.month = month.value; render(); });
+    if(year) year.addEventListener("change", ()=>{ dashboardState.year = year.value; render(); });
+    if(category) category.addEventListener("change", ()=>{ dashboardState.categoryId = category.value; render(); });
+    if(status) status.addEventListener("change", ()=>{ dashboardState.status = status.value; render(); });
+  }
+
+  if(currentTab === "categories"){
+    const form = document.getElementById("catForm");
+    const updateReadout = ()=>{
+      const fd = new FormData(form);
+      const profit = (Number(fd.get("price"))||0) - (Number(fd.get("cost"))||0);
+      document.getElementById("catProfitReadout").textContent = fmt(profit);
+    };
+    form.addEventListener("input", updateReadout);
+    document.getElementById("catSubmit").addEventListener("click", (e)=>{
+      e.preventDefault();
+      if(!form.reportValidity()) return;
+      const fd = new FormData(form);
+      const name = fd.get("name").trim();
+      if(!name) return;
+      const rawColors = (fd.get("colors")||"").trim();
+      const colors = rawColors ? rawColors.split(",").map(s=>s.trim()).filter(Boolean) : [];
+      state.categories.push({ id: uid(), name, colors, cost: Number(fd.get("cost")), price: Number(fd.get("price")) });
+      saveState(); toast("Category added"); render();
+    });
+    document.querySelectorAll("[data-del-cat]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.delCat;
+      confirmDelete("This bag category will be removed from the catalog.", ()=>{
+        state.categories = state.categories.filter(c=>c.id!==id);
+        saveState(); toast("Category deleted"); render();
+      });
+    }));
+    document.querySelectorAll("[data-edit-cat]").forEach(b=> b.addEventListener("click", ()=>{
+      const cat = state.categories.find(c=>c.id===b.dataset.editCat);
+      const currentColorsStr = getCategoryColors(cat).join(", ");
+      showModal(`
+        <h3>Edit category</h3>
+        <div class="field" style="margin-bottom:10px;"><label>Bag category name</label><input id="editName" value="${esc(cat.name)}"></div>
+        <div class="field" style="margin-bottom:10px;"><label>Available colours (comma-separated)</label><input id="editColors" value="${esc(currentColorsStr)}" placeholder="e.g. Black, Red, Brown"></div>
+        <div class="field" style="margin-bottom:10px;"><label>Production cost</label><input id="editCost" type="number" step="0.01" value="${cat.cost}"></div>
+        <div class="field" style="margin-bottom:16px;"><label>Selling price</label><input id="editPrice" type="number" step="0.01" value="${cat.price}"></div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="saveEditCat">Save</button>
+        </div>
+      `);
+      document.getElementById("saveEditCat").addEventListener("click", ()=>{
+        cat.name = document.getElementById("editName").value.trim() || cat.name;
+        const rawCol = document.getElementById("editColors").value.trim();
+        cat.colors = rawCol ? rawCol.split(",").map(s=>s.trim()).filter(Boolean) : [];
+        cat.cost = Number(document.getElementById("editCost").value)||0;
+        cat.price = Number(document.getElementById("editPrice").value)||0;
+        saveState(); closeModal(); toast("Category updated"); render();
+      });
+    }));
+  }
+
+  if(currentTab === "orders"){
+    const form = document.getElementById("orderForm");
+    if(form){
+      const updateReadout = ()=>{
+        const fd = new FormData(form);
+        const cat = state.categories.find(c=>c.id===fd.get("categoryId"));
+        const qty = Number(fd.get("qty"))||0;
+        const delivery = Number(fd.get("deliveryCharge"))||0;
+        const discount = Math.max(0, Number(fd.get("discount"))||0);
+        const totalDelivery = qty*delivery;
+        const grossSelling = qty*(cat?Number(cat.price):0);
+        const totalSelling = grossSelling - discount;
+        const totalCost = qty*(cat?Number(cat.cost):0);
+        const totalProfit = totalSelling - totalCost - totalDelivery;
+        document.getElementById("ordDelivery").textContent = fmt(totalDelivery);
+        document.getElementById("ordSelling").textContent = fmt(totalSelling);
+        const profitEl = document.getElementById("ordProfit");
+        profitEl.textContent = fmt(totalProfit);
+        profitEl.style.color = totalProfit>=0 ? "var(--good)" : "var(--bad)";
+      };
+      form.addEventListener("input", updateReadout);
+      updateReadout();
+      document.getElementById("orderSubmit").addEventListener("click", (e)=>{
+        e.preventDefault();
+        if(!form.reportValidity()) return;
+        const fd = new FormData(form);
+        state.orders.push({
+          id: uid(), date: fd.get("date"),
+          categoryId: fd.get("categoryId"), qty: Number(fd.get("qty")),
+          status: fd.get("status") || "Completed",
+          deliveryCharge: Number(fd.get("deliveryCharge")),
+          discount: Math.max(0, Number(fd.get("discount"))||0),
+        });
+        saveState(); toast("Order logged"); render();
+      });
+    }
+    document.querySelectorAll("[data-del-order]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.delOrder;
+      confirmDelete("This order will be removed.", ()=>{
+        state.orders = state.orders.filter(o=>o.id!==id);
+        saveState(); toast("Order deleted"); render();
+      });
+    }));
+    document.querySelectorAll("[data-edit-order]").forEach(b=> b.addEventListener("click", ()=>{
+      const o = state.orders.find(ord=>ord.id===b.dataset.editOrder);
+      if(!o) return;
+      const catOptions = state.categories.map(c=>`<option value="${c.id}" ${o.categoryId===c.id?'selected':''}>${esc(c.name)}</option>`).join("");
+      showModal(`
+        <h3>Edit order</h3>
+        <div class="field" style="margin-bottom:10px;"><label>Date</label><input id="editOrdDate" type="date" value="${o.date||todayStr()}"></div>
+        <div class="field" style="margin-bottom:10px;"><label>Bag category</label>
+          <select id="editOrdCat">${catOptions}</select>
+        </div>
+        <div class="field" style="margin-bottom:10px;"><label>Quantity</label><input id="editOrdQty" type="number" min="1" value="${o.qty||1}"></div>
+        <div class="field" style="margin-bottom:10px;"><label>Order status</label>
+          <select id="editOrdStatus">
+            <option value="Completed" ${(o.status||"Completed")==="Completed"?'selected':''}>Completed</option>
+            <option value="Pending" ${(o.status||"")==="Pending"?'selected':''}>Pending</option>
+            <option value="Cancelled" ${(o.status||"")==="Cancelled"?'selected':''}>Cancelled</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:10px;"><label>Delivery charge / unit (${CURRENCY})</label><input id="editOrdDelivery" type="number" step="0.01" min="0" value="${o.deliveryCharge!=null?o.deliveryCharge:state.settings.defaultDelivery}"></div>
+        <div class="field" style="margin-bottom:16px;"><label>Discount amount (${CURRENCY})</label><input id="editOrdDiscount" type="number" step="0.01" min="0" value="${o.discount||0}"></div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="saveEditOrd">Save</button>
+        </div>
+      `);
+      document.getElementById("saveEditOrd").addEventListener("click", ()=>{
+        o.date = document.getElementById("editOrdDate").value || o.date;
+        o.categoryId = document.getElementById("editOrdCat").value || o.categoryId;
+        o.qty = Number(document.getElementById("editOrdQty").value) || 1;
+        o.status = document.getElementById("editOrdStatus").value || "Completed";
+        o.deliveryCharge = Number(document.getElementById("editOrdDelivery").value) || 0;
+        o.discount = Math.max(0, Number(document.getElementById("editOrdDiscount").value) || 0);
+        saveState(); closeModal(); toast("Order updated"); render();
+      });
+    }));
+  }
+
+  if(currentTab === "returns"){
+    const form = document.getElementById("returnForm");
+    if(form){
+      const updateReadout = ()=>{
+        const fd = new FormData(form);
+        const cat = state.categories.find(c=>c.id===fd.get("categoryId"));
+        const qty = Number(fd.get("qty"))||0;
+        const rate = Number(fd.get("deliveryRate"))||0;
+        const deliveryAmt = qty*rate;
+        const profitImpact = cat ? qty*(Number(cat.price)-Number(cat.cost)-rate) : 0;
+        document.getElementById("retDelivery").textContent = fmt(deliveryAmt);
+        document.getElementById("retLoss").textContent = fmt(deliveryAmt+profitImpact);
+      };
+      form.addEventListener("input", updateReadout);
+      updateReadout();
+      document.getElementById("returnSubmit").addEventListener("click", (e)=>{
+        e.preventDefault();
+        if(!form.reportValidity()) return;
+        const fd = new FormData(form);
+        state.returns.push({
+          id: uid(), date: fd.get("date"),
+          categoryId: fd.get("categoryId"), qty: Number(fd.get("qty")), deliveryRate: Number(fd.get("deliveryRate")),
+        });
+        saveState(); toast("Return logged"); render();
+      });
+    }
+    document.querySelectorAll("[data-del-return]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.delReturn;
+      confirmDelete("This return record will be removed.", ()=>{
+        state.returns = state.returns.filter(r=>r.id!==id);
+        saveState(); toast("Return deleted"); render();
+      });
+    }));
+  }
+
+  if(currentTab === "reports"){
+    document.querySelectorAll("[data-preset]").forEach(b=> b.addEventListener("click", ()=>{
+      const r = reportRange(b.dataset.preset);
+      if(r){
+        reportState.start = r.start;
+        reportState.end = r.end;
+        if(r.start) reportState.year = r.start.slice(0,4);
+        render();
+      }
+    }));
+    const rpStart = document.getElementById("rpStart");
+    const rpEnd = document.getElementById("rpEnd");
+    const rpCategory = document.getElementById("rpCategory");
+    const rpYear = document.getElementById("rpYear");
+    if(rpStart) rpStart.addEventListener("change", ()=>{
+      reportState.start = rpStart.value;
+      if(rpStart.value) reportState.year = rpStart.value.slice(0,4);
+      render();
+    });
+    if(rpEnd) rpEnd.addEventListener("change", ()=>{ reportState.end = rpEnd.value; render(); });
+    if(rpCategory) rpCategory.addEventListener("change", ()=>{ reportState.categoryId = rpCategory.value; render(); });
+    if(rpYear) rpYear.addEventListener("change", ()=>{ reportState.year = rpYear.value; render(); });
+  }
+
+  if(currentTab === "finance"){
+    const incomeForm = document.getElementById("incomeForm");
+    document.getElementById("incomeSubmit").addEventListener("click", (e)=>{
+      e.preventDefault();
+      if(!incomeForm.reportValidity()) return;
+      const fd = new FormData(incomeForm);
+      state.income.push({ id: uid(), date: fd.get("date"), type: fd.get("type"), desc: fd.get("desc").trim(), amount: Number(fd.get("amount")) });
+      saveState(); toast("Income added"); render();
+    });
+    document.getElementById("addIncomeType").addEventListener("click", ()=>{
+      const val = document.getElementById("newIncomeType").value.trim();
+      if(val && !state.incomeTypes.includes(val)){ state.incomeTypes.push(val); saveState(); toast("Income type added"); render(); }
+    });
+    document.querySelectorAll("[data-del-income]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.delIncome;
+      confirmDelete("This income entry will be removed.", ()=>{
+        state.income = state.income.filter(i=>i.id!==id); saveState(); toast("Income deleted"); render();
+      });
+    }));
+
+    const expenseForm = document.getElementById("expenseForm");
+    document.getElementById("expenseSubmit").addEventListener("click", (e)=>{
+      e.preventDefault();
+      if(!expenseForm.reportValidity()) return;
+      const fd = new FormData(expenseForm);
+      state.expenses.push({ id: uid(), date: fd.get("date"), type: fd.get("type"), desc: fd.get("desc").trim(), amount: Number(fd.get("amount")) });
+      saveState(); toast("Expense added"); render();
+    });
+    document.getElementById("addExpenseType").addEventListener("click", ()=>{
+      const val = document.getElementById("newExpenseType").value.trim();
+      if(val && !state.expenseTypes.includes(val)){ state.expenseTypes.push(val); saveState(); toast("Expense type added"); render(); }
+    });
+    document.querySelectorAll("[data-del-expense]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.delExpense;
+      confirmDelete("This expense entry will be removed.", ()=>{
+        state.expenses = state.expenses.filter(x=>x.id!==id); saveState(); toast("Expense deleted"); render();
+      });
+    }));
+  }
+
+  if(currentTab === "tailors"){
+    // Month filter
+    const monthFilter = document.getElementById("tailorMonthFilter");
+    if(monthFilter){
+      monthFilter.addEventListener("change", ()=>{
+        tailorFilterState.month = monthFilter.value;
+        render();
+      });
+    }
+
+    // Status filter
+    const statusFilter = document.getElementById("tailorStatusFilter");
+    if(statusFilter){
+      statusFilter.addEventListener("change", ()=>{
+        tailorFilterState.status = statusFilter.value;
+        render();
+      });
+    }
+
+    // Search filter
+    const searchInput = document.getElementById("tailorSearchInput");
+    if(searchInput){
+      searchInput.addEventListener("input", ()=>{
+        tailorFilterState.search = searchInput.value;
+        render();
+      });
+    }
+
+    // Header buttons
+    const btnAddTailor = document.getElementById("btnOpenAddTailor");
+    if(btnAddTailor) btnAddTailor.addEventListener("click", ()=> openTailorModal());
+
+    const btnAssign = document.getElementById("btnOpenAssignBags");
+    if(btnAssign) btnAssign.addEventListener("click", ()=> openAssignModal());
+
+    const btnLogComp = document.getElementById("btnOpenLogCompletion");
+    if(btnLogComp) btnLogComp.addEventListener("click", ()=> openLogCompletionModal());
+
+    const btnPay = document.getElementById("btnOpenPayment");
+    if(btnPay) btnPay.addEventListener("click", ()=> openPaymentModal());
+
+    const btnColors = document.getElementById("btnOpenColors");
+    if(btnColors) btnColors.addEventListener("click", ()=> openColorsModal());
+
+    // Row buttons
+    document.querySelectorAll("[data-quick-complete]").forEach(b => {
+      b.addEventListener("click", ()=> openLogCompletionModal(b.dataset.quickComplete));
+    });
+
+    document.querySelectorAll("[data-quick-assign]").forEach(b => {
+      b.addEventListener("click", ()=> openAssignModal(b.dataset.quickAssign));
+    });
+
+    document.querySelectorAll("[data-view-tailor]").forEach(b => {
+      b.addEventListener("click", ()=> openTailorHistoryModal(b.dataset.viewTailor));
+    });
+
+    document.querySelectorAll("[data-edit-tailor]").forEach(b => {
+      b.addEventListener("click", ()=>{
+        const t = (state.tailors||[]).find(x => x.id === b.dataset.editTailor);
+        if(t) openTailorModal(t);
+      });
+    });
+
+    document.querySelectorAll("[data-toggle-tailor-status]").forEach(b => {
+      b.addEventListener("click", ()=>{
+        const t = (state.tailors||[]).find(x => x.id === b.dataset.toggleTailorStatus);
+        if(t){
+          t.status = (t.status === "Active" || !t.status) ? "Inactive" : "Active";
+          t.updatedAt = new Date().toISOString();
+          saveState();
+          toast(`Tailor ${t.name} is now ${t.status}`);
+          render();
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-del-tailor]").forEach(b => {
+      b.addEventListener("click", ()=>{
+        const id = b.dataset.delTailor;
+        confirmDelete("This tailor and all associated assignments and payments will be permanently removed.", ()=>{
+          state.tailors = (state.tailors||[]).filter(t => t.id !== id);
+          state.assignments = (state.assignments||[]).filter(a => a.tailorId !== id);
+          state.payments = (state.payments||[]).filter(p => p.tailorId !== id);
+          state.completions = (state.completions||[]).filter(c => c.tailorId !== id);
+          saveState();
+          toast("Tailor deleted");
+          render();
+        });
+      });
+    });
+
+    document.querySelectorAll("[data-del-completion]").forEach(b => {
+      b.addEventListener("click", ()=>{
+        deleteCompletion(b.dataset.delCompletion);
+      });
+    });
+
+    document.querySelectorAll("[data-del-assign]").forEach(b => {
+      b.addEventListener("click", ()=>{
+        const id = b.dataset.delAssign;
+        confirmDelete("This assignment record will be removed.", ()=>{
+          state.assignments = (state.assignments||[]).filter(a => a.id !== id);
+          saveState();
+          toast("Assignment deleted");
+          render();
+        });
+      });
+    });
+  }
+
+  if(currentTab === "data"){
+    document.getElementById("exportBtn").addEventListener("click", ()=>{
+      const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `doublebee-backup-${todayStr()}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast("Backup downloaded");
+    });
+    const fileInput = document.getElementById("importFile");
+    document.getElementById("importBtn").addEventListener("click", ()=> fileInput.click());
+    fileInput.addEventListener("change", ()=>{
+      const file = fileInput.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const parsed = JSON.parse(reader.result);
+          showModal(`
+            <h3>Restore this backup?</h3>
+            <p>All current data in this browser will be replaced with the contents of "${esc(file.name)}".</p>
+            <div class="form-actions">
+              <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+              <button class="btn btn-primary" id="confirmRestore">Restore</button>
+            </div>
+          `);
+          document.getElementById("confirmRestore").addEventListener("click", ()=>{
+            state = Object.assign(defaultState(), parsed);
+            saveState(); closeModal(); toast("Data restored"); render();
+          });
+        }catch(err){ toast("That file doesn't look like a valid backup."); }
+      };
+      reader.readAsText(file);
+    });
+    document.getElementById("wipeBtn").addEventListener("click", ()=>{
+      showModal(`
+        <h3>Erase everything?</h3>
+        <p>All categories, orders, returns, income, expenses, tailors and payments will be permanently deleted from this browser.</p>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-danger" id="confirmWipe">Erase all data</button>
+        </div>
+      `);
+      document.getElementById("confirmWipe").addEventListener("click", ()=>{
+        state = defaultState(); saveState(); closeModal(); toast("All data erased"); render();
+      });
+    });
+  }
+}
+
+/* ---------------- Init ---------------- */
+renderNav();
+render();
+</script>
+</body>
+</html>
+
