@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg: #F2F4F7;
@@ -173,6 +174,40 @@
   }
   .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
 
+  /* ---------- Auth screen ---------- */
+  #authScreen{
+    position:fixed; inset:0; background: var(--bg); z-index: 1000;
+    display:flex; align-items:center; justify-content:center; padding: 24px;
+    padding-top: calc(24px + env(safe-area-inset-top)); padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  #authScreen.hide{ display:none; }
+  .hide-until-auth{ display:none !important; }
+  .auth-card{ background: var(--surface); border:1px solid var(--border-soft); border-radius: var(--radius); padding: 28px 26px; max-width: 380px; width:100%; box-shadow: 0 16px 36px rgba(0,0,0,0.08); }
+  .auth-brand{ display:flex; align-items:center; gap:10px; margin-bottom: 22px; }
+  .auth-brand h1{ font-size:20px; color:var(--text); }
+  .auth-title{ font-size:15px; font-weight:600; color:var(--text); margin-bottom:4px; }
+  .auth-sub{ font-size:12.5px; color:var(--text-faint); margin-bottom:18px; line-height:1.5; }
+  .auth-field{ display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
+  .auth-field label{ font-size:12px; color: var(--text-faint); }
+  .auth-field input{
+    background: var(--bg-raised); border:1px solid var(--border); color: var(--text);
+    padding: 10px 11px; border-radius: var(--radius-sm); font-size:16px; outline:none;
+  }
+  .auth-field input:focus{ border-color: var(--accent-dim); }
+  .auth-error{ background: var(--bad-bg); color: var(--bad); font-size:12.5px; padding:9px 11px; border-radius: var(--radius-sm); margin-bottom:12px; display:none; }
+  .auth-error.show{ display:block; }
+  .auth-hint{ background: var(--surface-2); color: var(--text-dim); font-size:12px; padding:9px 11px; border-radius: var(--radius-sm); margin-bottom:12px; display:none; line-height:1.5; }
+  .auth-hint.show{ display:block; }
+  .auth-actions{ display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .auth-actions .btn{ width:100%; min-height:40px; }
+  .auth-switch{ text-align:center; font-size:12.5px; color: var(--text-faint); margin-top:16px; }
+  .auth-switch button{ background:none; border:none; color: var(--accent); cursor:pointer; font-size:12.5px; font-weight:600; padding:0; }
+  .sync-status{ display:flex; align-items:center; gap:6px; font-size:11px; color: var(--text-faint); }
+  .sync-dot{ width:6px; height:6px; border-radius:50%; background: var(--text-faint); flex-shrink:0; }
+  .sync-dot.ok{ background: var(--good); }
+  .sync-dot.busy{ background: var(--accent); }
+  .sync-dot.err{ background: var(--bad); }
+
   .modal-backdrop{
     position:fixed; inset:0; background: rgba(30,39,51,.45); display:none; align-items:center; justify-content:center;
     z-index: 900; padding: 20px;
@@ -297,13 +332,50 @@
 </head>
 <body>
 
-<div id="app">
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M7 8V6a5 5 0 0110 0v2" stroke="#2E6FE0" stroke-width="1.6"/><rect x="4" y="8" width="16" height="12" rx="2" stroke="#2E6FE0" stroke-width="1.6"/></svg>
+      <h1>doubleBee</h1>
+    </div>
+    <div class="auth-title" id="authTitle">Sign in to your business</div>
+    <div class="auth-sub" id="authSub">Your data syncs across every device you sign in on.</div>
+
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-hint" id="authHint"></div>
+
+    <form id="authForm">
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="authEmail" autocomplete="username" required>
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="authPassword" autocomplete="current-password" minlength="6" required>
+      </div>
+      <div class="auth-actions">
+        <button type="submit" class="btn btn-primary" id="authSubmitBtn">Sign in</button>
+      </div>
+    </form>
+
+    <div class="auth-switch">
+      <span id="authSwitchLabel">Don't have an account?</span>
+      <button type="button" id="authSwitchBtn">Create one</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="hide-until-auth">
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main">
     <div class="mobile-topbar">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M7 8V6a5 5 0 0110 0v2" stroke="#2E6FE0" stroke-width="1.6"/><rect x="4" y="8" width="16" height="12" rx="2" stroke="#2E6FE0" stroke-width="1.6"/></svg>
       <h1 style="color:var(--text)">doubleBee</h1>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+        <div class="sync-status" id="syncStatusMobile"><span class="sync-dot"></span><span>—</span></div>
+        <button class="icon-btn" id="btnSignOutMobile" title="Sign out"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
+      </div>
     </div>
     <div class="topline">
       <div>
@@ -316,7 +388,7 @@
   </main>
 </div>
 
-<nav class="bottom-nav" id="bottomNav"></nav>
+<nav class="bottom-nav hide-until-auth" id="bottomNav"></nav>
 <div class="toast" id="toast"></div>
 <div class="modal-backdrop" id="modalBackdrop">
   <div class="modal" id="modalBox"></div>
@@ -325,11 +397,22 @@
 <script>
 /* =========================================================
    DOUBLEBEE — Bag Business Manager
-   Single-file vanilla JS app. Data persisted to localStorage.
+   Single-file vanilla JS app. Data synced to Supabase (Postgres),
+   with a local cache in localStorage as an offline fallback.
    ========================================================= */
 
 const STORAGE_KEY = "doublebee_bagbiz_v1";
 const CURRENCY = "LKR";
+
+/* ---------- Supabase config ---------- */
+const SUPABASE_URL = "https://icjvmsdbbymmudxxtcba.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_TK6j4J7TJZ9YsVbpv_NUPQ_cBIU52SD";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;   // Supabase auth user, set once signed in
+let authMode = "signin";  // "signin" | "signup"
+let saveTimer = null;     // debounce handle for pushing to Supabase
+let syncState = "idle";   // "idle" | "syncing" | "ok" | "error"
 
 const NAV_ITEMS = [
   { id:"dashboard", label:"Dashboard", icon: iconHome },
@@ -342,7 +425,7 @@ const NAV_ITEMS = [
   { id:"data", label:"Backup & Restore", icon: iconDisk },
 ];
 
-let state = loadState();
+let state = defaultState();
 let currentTab = "dashboard";
 
 function defaultState(){
@@ -363,16 +446,81 @@ function defaultState(){
   };
 }
 
-function loadState(){
+function localKey(){
+  return currentUser ? STORAGE_KEY + "_" + currentUser.id : STORAGE_KEY;
+}
+function loadLocalState(){
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return defaultState();
+    const raw = localStorage.getItem(localKey());
+    if(!raw) return null;
     const parsed = JSON.parse(raw);
     return Object.assign(defaultState(), parsed);
-  }catch(e){ return defaultState(); }
+  }catch(e){ return null; }
 }
+function saveLocalState(){
+  try{ localStorage.setItem(localKey(), JSON.stringify(state)); }catch(e){}
+}
+
+/* Pull the latest saved state for the signed-in user from Supabase.
+   Falls back to the local cache (or a blank state) if offline / first run. */
+async function loadRemoteState(){
+  const local = loadLocalState();
+  if(!currentUser) return local || defaultState();
+  try{
+    const { data, error } = await sb
+      .from("app_state")
+      .select("data")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+    if(error) throw error;
+    if(data && data.data){
+      return Object.assign(defaultState(), data.data);
+    }
+    // No row yet for this user — first time signing in on any device.
+    return local || defaultState();
+  }catch(e){
+    console.warn("Could not reach Supabase, using local cache:", e);
+    setSyncStatus("error");
+    return local || defaultState();
+  }
+}
+
+/* Called any time app data changes. Writes locally right away (instant,
+   offline-safe) and pushes to Supabase shortly after (debounced). */
 function saveState(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  saveLocalState();
+  if(!currentUser) return;
+  setSyncStatus("syncing");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(pushRemoteState, 700);
+}
+
+async function pushRemoteState(){
+  if(!currentUser) return;
+  try{
+    const { error } = await sb.from("app_state").upsert({
+      user_id: currentUser.id,
+      data: state,
+      updated_at: new Date().toISOString(),
+    });
+    if(error) throw error;
+    setSyncStatus("ok");
+  }catch(e){
+    console.warn("Sync to Supabase failed:", e);
+    setSyncStatus("error");
+  }
+}
+
+function setSyncStatus(s){
+  syncState = s;
+  const label = { idle:"—", syncing:"Syncing…", ok:"Synced", error:"Sync error — saved locally" }[s] || "—";
+  const dotClass = { idle:"", syncing:"busy", ok:"ok", error:"err" }[s] || "";
+  document.querySelectorAll(".sync-status").forEach(el=>{
+    const dot = el.querySelector(".sync-dot");
+    const txt = el.querySelector("span:last-child");
+    if(dot) dot.className = "sync-dot" + (dotClass ? " " + dotClass : "");
+    if(txt) txt.textContent = label;
+  });
 }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
@@ -515,9 +663,15 @@ function renderNav(){
         ${item.icon()} ${item.label}
       </button>
     `).join("")}
-    <div class="sidebar-foot">Data is stored only on this device.<br>Back up regularly from the Backup tab.</div>
+    <div class="sidebar-foot">
+      <div class="sync-status" style="margin-bottom:8px;"><span class="sync-dot"></span><span>—</span></div>
+      <div style="color:var(--text-dim);font-weight:600;font-size:11.5px;margin-bottom:6px;word-break:break-all;">${currentUser ? esc(currentUser.email) : ""}</div>
+      <button class="btn btn-ghost btn-sm" id="btnSignOutDesktop" style="width:100%;">Sign out</button>
+    </div>
   `;
   sidebar.querySelectorAll(".nav-btn").forEach(b=> b.addEventListener("click", ()=> setTab(b.dataset.tab)));
+  const signOutDesktop = document.getElementById("btnSignOutDesktop");
+  if(signOutDesktop) signOutDesktop.addEventListener("click", handleSignOut);
 
   const bn = document.getElementById("bottomNav");
   bn.innerHTML = NAV_ITEMS.map(item=>{
@@ -2408,18 +2562,34 @@ function renderData(){
     Income: state.income.length, Expenses: state.expenses.length, Tailors: state.tailors.length,
   };
   return `
+    <div class="card" style="margin-bottom:20px;">
+      <h3 style="font-size:15px;margin-bottom:10px;">Account &amp; sync</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-size:13.5px;color:var(--text);font-weight:600;">${currentUser ? esc(currentUser.email) : "—"}</div>
+          <div class="sync-status" style="margin-top:5px;"><span class="sync-dot"></span><span>—</span></div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="btnSyncNow">Sync now</button>
+          <button class="btn btn-ghost btn-sm" id="btnSignOutData">Sign out</button>
+        </div>
+      </div>
+      <p style="color:var(--text-faint);font-size:12px;line-height:1.6;margin:12px 0 0;">
+        Your data is stored in your Supabase account and synced automatically whenever you make a change. Sign in with the same account on any device to see the same data.
+      </p>
+    </div>
     <div class="two-col">
       <div class="card">
         <h3 style="font-size:15px;margin-bottom:10px;">Export your data</h3>
         <p style="color:var(--text-dim);font-size:13.5px;line-height:1.6;margin:0 0 14px;">
-          Download everything as a JSON file. Keep it somewhere safe — Google Drive, Dropbox, email to yourself — since data only lives in this browser otherwise.
+          Download everything as a JSON file — a good extra backup on top of cloud sync, e.g. for sending to your accountant or archiving.
         </p>
         <button class="btn btn-primary" id="exportBtn">Download backup (.json)</button>
       </div>
       <div class="card">
         <h3 style="font-size:15px;margin-bottom:10px;">Restore from a file</h3>
         <p style="color:var(--text-dim);font-size:13.5px;line-height:1.6;margin:0 0 14px;">
-          Restoring replaces all current data in this browser with the contents of the file. Export a backup first if you're not sure.
+          Restoring replaces all current data — locally and in your synced account — with the contents of the file. Export a backup first if you're not sure.
         </p>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
         <button class="btn btn-ghost" id="importBtn">Choose backup file…</button>
@@ -2431,7 +2601,7 @@ function renderData(){
     </div>
     <div class="section-title">Danger zone</div>
     <div class="card">
-      <p style="color:var(--text-dim);font-size:13.5px;margin:0 0 14px;">Erase all data stored in this browser. This cannot be undone — export a backup first.</p>
+      <p style="color:var(--text-dim);font-size:13.5px;margin:0 0 14px;">Erase all data — locally and from your synced account. This cannot be undone — export a backup first.</p>
       <button class="btn btn-danger" id="wipeBtn">Erase all data</button>
     </div>
   `;
@@ -2794,6 +2964,15 @@ function bindTabEvents(){
   }
 
   if(currentTab === "data"){
+    const syncNowBtn = document.getElementById("btnSyncNow");
+    if(syncNowBtn) syncNowBtn.addEventListener("click", async ()=>{
+      setSyncStatus("syncing");
+      await pushRemoteState();
+      toast(syncState === "ok" ? "Synced" : "Sync failed — check your connection");
+    });
+    const signOutDataBtn = document.getElementById("btnSignOutData");
+    if(signOutDataBtn) signOutDataBtn.addEventListener("click", handleSignOut);
+
     document.getElementById("exportBtn").addEventListener("click", ()=>{
       const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
       const url = URL.createObjectURL(blob);
@@ -2814,7 +2993,7 @@ function bindTabEvents(){
           const parsed = JSON.parse(reader.result);
           showModal(`
             <h3>Restore this backup?</h3>
-            <p>All current data in this browser will be replaced with the contents of "${esc(file.name)}".</p>
+            <p>All current data — locally and in your synced account — will be replaced with the contents of "${esc(file.name)}".</p>
             <div class="form-actions">
               <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
               <button class="btn btn-primary" id="confirmRestore">Restore</button>
@@ -2831,7 +3010,7 @@ function bindTabEvents(){
     document.getElementById("wipeBtn").addEventListener("click", ()=>{
       showModal(`
         <h3>Erase everything?</h3>
-        <p>All categories, orders, returns, income, expenses, tailors and payments will be permanently deleted from this browser.</p>
+        <p>All categories, orders, returns, income, expenses, tailors and payments will be permanently deleted — locally and from your synced account.</p>
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
           <button class="btn btn-danger" id="confirmWipe">Erase all data</button>
@@ -2844,9 +3023,132 @@ function bindTabEvents(){
   }
 }
 
+/* ============================================================
+   AUTH
+   ============================================================ */
+const authScreenEl = document.getElementById("authScreen");
+const authForm = document.getElementById("authForm");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authError = document.getElementById("authError");
+const authHint = document.getElementById("authHint");
+const authTitle = document.getElementById("authTitle");
+const authSub = document.getElementById("authSub");
+const authSubmitBtn = document.getElementById("authSubmitBtn");
+const authSwitchLabel = document.getElementById("authSwitchLabel");
+const authSwitchBtn = document.getElementById("authSwitchBtn");
+
+function showAuthError(msg){
+  authError.textContent = msg;
+  authError.classList.add("show");
+}
+function clearAuthMessages(){
+  authError.classList.remove("show"); authError.textContent = "";
+  authHint.classList.remove("show"); authHint.textContent = "";
+}
+function setAuthMode(mode){
+  authMode = mode;
+  clearAuthMessages();
+  if(mode === "signup"){
+    authTitle.textContent = "Create your business account";
+    authSub.textContent = "One account, all your devices. You'll use this to sign in everywhere.";
+    authSubmitBtn.textContent = "Create account";
+    authSwitchLabel.textContent = "Already have an account?";
+    authSwitchBtn.textContent = "Sign in";
+  }else{
+    authTitle.textContent = "Sign in to your business";
+    authSub.textContent = "Your data syncs across every device you sign in on.";
+    authSubmitBtn.textContent = "Sign in";
+    authSwitchLabel.textContent = "Don't have an account?";
+    authSwitchBtn.textContent = "Create one";
+  }
+}
+authSwitchBtn.addEventListener("click", ()=> setAuthMode(authMode === "signin" ? "signup" : "signin"));
+
+const signOutMobileBtn = document.getElementById("btnSignOutMobile");
+if(signOutMobileBtn) signOutMobileBtn.addEventListener("click", handleSignOut);
+
+authForm.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  clearAuthMessages();
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  if(!email || password.length < 6){
+    showAuthError("Enter a valid email and a password of at least 6 characters.");
+    return;
+  }
+  authSubmitBtn.disabled = true;
+  const originalLabel = authSubmitBtn.textContent;
+  authSubmitBtn.textContent = "Please wait…";
+  try{
+    if(authMode === "signup"){
+      const { data, error } = await sb.auth.signUp({ email, password });
+      if(error) throw error;
+      if(data.session){
+        await onSignedIn(data.session.user);
+      }else{
+        authHint.textContent = "Account created. Check your email to confirm it, then sign in.";
+        authHint.classList.add("show");
+        setAuthMode("signin");
+      }
+    }else{
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if(error) throw error;
+      await onSignedIn(data.user);
+    }
+  }catch(err){
+    showAuthError(err.message || "Something went wrong. Please try again.");
+  }finally{
+    authSubmitBtn.disabled = false;
+    authSubmitBtn.textContent = originalLabel;
+  }
+});
+
+async function onSignedIn(user){
+  currentUser = user;
+  authScreenEl.classList.add("hide");
+  document.querySelectorAll(".hide-until-auth").forEach(el=> el.classList.remove("hide-until-auth"));
+  setSyncStatus("syncing");
+  state = await loadRemoteState();
+  setSyncStatus(syncState === "error" ? "error" : "ok");
+  saveLocalState();
+  currentTab = "dashboard";
+  renderNav();
+  render();
+}
+
+function handleSignOut(){
+  showModal(`
+    <h3>Sign out?</h3>
+    <p>You'll need to sign in again to access your synced data on this device.</p>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirmSignOut">Sign out</button>
+    </div>
+  `);
+  document.getElementById("confirmSignOut").addEventListener("click", async ()=>{
+    closeModal();
+    await sb.auth.signOut();
+    currentUser = null;
+    state = defaultState();
+    document.querySelectorAll(".hide-until-auth").forEach(el=> el.classList.add("hide-until-auth"));
+    authScreenEl.classList.remove("hide");
+    authForm.reset();
+    setAuthMode("signin");
+  });
+}
+
 /* ---------------- Init ---------------- */
-renderNav();
-render();
+(async function initAuth(){
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    if(session && session.user){
+      await onSignedIn(session.user);
+      return;
+    }
+  }catch(e){ console.warn("Session check failed:", e); }
+  authScreenEl.classList.remove("hide");
+})();
 </script>
 </body>
 </html>
