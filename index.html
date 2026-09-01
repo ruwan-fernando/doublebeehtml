@@ -441,9 +441,25 @@ function defaultState(){
     assignments: [],
     payments: [],
     completions: [],
+    imports: [],
     colors: ["Black", "Red", "Brown", "Blue", "Green", "White", "Navy", "Tan", "Maroon", "Beige", "Yellow", "Olive"],
     settings: { defaultDelivery: 500 },
   };
+}
+// Upgrades any import records saved in the old single-category-per-batch shape
+// (categoryId/qty/unitCost directly on the record) into the current
+// shipment-with-multiple-items shape, so older saved data keeps working.
+function migrateImports(imports){
+  return (imports||[]).map(imp=>{
+    if(Array.isArray(imp.items)) return imp;
+    return {
+      id: imp.id, date: imp.date, note: imp.note || "",
+      domesticCost: 0,
+      shippingCost: Number(imp.shippingCost||0),
+      otherCost: Number(imp.otherCost||0),
+      items: [{ id: uid(), categoryId: imp.categoryId, qty: Number(imp.qty)||0, totalPayment: (Number(imp.qty)||0) * Number(imp.unitCost||0) }],
+    };
+  });
 }
 
 function localKey(){
@@ -769,6 +785,7 @@ function renderDashboard(){
 
   const categories = state.categories;
   const statuses = ["all","Completed","Pending","Cancelled"];
+  const stockTotals = getAllStockTotals();
 
   const monthlyData = Array.from({length:12},(_,i)=>{
     const key = selectedYear + "-" + String(i+1).padStart(2,"0");
@@ -825,6 +842,15 @@ function renderDashboard(){
       <div class="card kpi-card"><div class="kpi-label">Total Return Loss</div><div class="kpi-value bad">${fmt(returnLoss)}</div><div class="kpi-sub">${monthReturns.length} return${monthReturns.length===1?'':'s'} · ${returnQtyTotal} bags</div></div>
       <div class="card kpi-card"><div class="kpi-label">Net Monthly Profit</div><div class="kpi-value ${netProfit>=0?'good':'bad'}">${fmt(netProfit)}</div><div class="kpi-sub">Profit after returns − total expenses · other income excluded</div></div>
     </div>
+
+    ${stockTotals.invested > 0 ? `
+    <div class="section-title">China imports — capital invested (all-time)</div>
+    <div class="grid kpi-grid" style="margin-bottom:22px;">
+      <div class="card kpi-card"><div class="kpi-label">Capital Invested</div><div class="kpi-value">${fmt(stockTotals.invested)}</div><div class="kpi-sub">Total spent on import batches</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Capital Recovered</div><div class="kpi-value good">${fmt(stockTotals.recovered)}</div><div class="kpi-sub">${stockTotals.invested>0 ? Math.round(stockTotals.recovered/stockTotals.invested*100) : 0}% of capital back</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Still In Stock</div><div class="kpi-value">${fmt(stockTotals.pending)}</div><div class="kpi-sub">${stockTotals.stockQty} bags unsold</div></div>
+    </div>
+    ` : ''}
 
     <div class="section-title">12-month order comparison · ${selectedYear}</div>
     <div class="card chart-card">${monthlyChart}</div>
@@ -955,28 +981,101 @@ function monthLabel(m){
   return d.toLocaleDateString("en-US", {month:"long", year:"numeric"});
 }
 
+/* ---------- China imports / stock capital tracking ----------
+   One "shipment" can contain several bag types at once (e.g. 500 bags across
+   3 categories in one container), plus shared costs (domestic transport,
+   international shipping, other fees) that apply to the whole shipment.
+   Shared costs are split evenly per bag across every item in the shipment,
+   then added to that item's own per-bag payment to get its landed cost. */
+function importItemQty(item){ return Number(item.qty)||0; }
+function importShipmentTotalQty(imp){ return (imp.items||[]).reduce((s,it)=> s + importItemQty(it), 0); }
+function importShipmentItemsPayment(imp){ return (imp.items||[]).reduce((s,it)=> s + Number(it.totalPayment||0), 0); }
+function importShipmentSharedCost(imp){ return Number(imp.domesticCost||0) + Number(imp.shippingCost||0) + Number(imp.otherCost||0); }
+function importShipmentTotalCost(imp){ return importShipmentItemsPayment(imp) + importShipmentSharedCost(imp); }
+// Shared cost spread per bag, evenly across every bag in the shipment regardless of type.
+function importShipmentSharedPerBag(imp){
+  const qty = importShipmentTotalQty(imp);
+  return qty > 0 ? importShipmentSharedCost(imp) / qty : 0;
+}
+// What one bag of this item actually cost: its own payment/bag + its share of domestic/shipping/other costs.
+function importItemLandedCost(imp, item){
+  const qty = importItemQty(item);
+  const unitPayment = qty > 0 ? Number(item.totalPayment||0) / qty : 0;
+  return unitPayment + importShipmentSharedPerBag(imp);
+}
+function importItemTotalLandedCost(imp, item){
+  return importItemLandedCost(imp, item) * importItemQty(item);
+}
+// Rolls up all shipments/items for one category into: how much was imported, how much money that
+// tied up, how much of it has been recovered through sales (net of returns), and what's still sitting
+// in stock. Uses a weighted-average landed cost across every shipment that included this category.
+function getCategoryStock(categoryId){
+  let totalImportedQty = 0, totalInvested = 0;
+  (state.imports||[]).forEach(imp=>{
+    (imp.items||[]).forEach(item=>{
+      if(item.categoryId === categoryId){
+        totalImportedQty += importItemQty(item);
+        totalInvested += importItemTotalLandedCost(imp, item);
+      }
+    });
+  });
+  const avgLandedCost = totalImportedQty > 0 ? totalInvested / totalImportedQty : 0;
+
+  const soldQty = (state.orders||[]).filter(o => o.categoryId === categoryId && (o.status||"Completed") !== "Cancelled")
+    .reduce((s,o)=> s + (Number(o.qty)||0), 0);
+  const returnedQty = (state.returns||[]).filter(r => r.categoryId === categoryId)
+    .reduce((s,r)=> s + (Number(r.qty)||0), 0);
+  // Returns bring bags back into stock, so they reduce net sold — capital tied up in them is
+  // automatically un-recovered again.
+  const netSoldQty = Math.max(0, soldQty - returnedQty);
+
+  const recoveredQty = Math.min(netSoldQty, totalImportedQty);
+  const capitalRecovered = recoveredQty * avgLandedCost;
+  const stockQty = Math.max(0, totalImportedQty - netSoldQty);
+  const capitalPending = stockQty * avgLandedCost;
+
+  return { totalImportedQty, totalInvested, avgLandedCost, soldQty, returnedQty, netSoldQty, capitalRecovered, stockQty, capitalPending };
+}
+// Same, but summed across every category — for the top-line capital KPIs.
+function getAllStockTotals(){
+  return (state.categories||[]).reduce((acc,c)=>{
+    const s = getCategoryStock(c.id);
+    acc.invested += s.totalInvested;
+    acc.recovered += s.capitalRecovered;
+    acc.pending += s.capitalPending;
+    acc.stockQty += s.stockQty;
+    return acc;
+  }, { invested:0, recovered:0, pending:0, stockQty:0 });
+}
+
 /* ============================================================
    MODULE 1 — BAG CATALOG
    ============================================================ */
 function renderCategories(){
   const rows = state.categories;
+  const importRows = [...(state.imports||[])].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+  const stockTotals = getAllStockTotals();
+  const categoryStockRows = state.categories
+    .map(c => ({ c, s: getCategoryStock(c.id) }))
+    .filter(({s}) => s.totalImportedQty > 0);
   return `
     <div class="card form-card">
       <h3 style="margin-bottom:14px;font-size:15px;">Add bag category</h3>
       <form id="catForm" class="form-grid">
         <div class="field"><label>Bag category name</label><input name="name" placeholder="e.g. Crocodile Bag" required></div>
         <div class="field"><label>Available colours (comma-separated)</label><input name="colors" placeholder="e.g. Black, Red, Brown"></div>
-        <div class="field"><label>Production cost (${CURRENCY})</label><input name="cost" type="number" step="0.01" min="0" placeholder="0.00" required></div>
+        <div class="field"><label>Cost per bag (${CURRENCY})</label><input name="cost" type="number" step="0.01" min="0" placeholder="0.00" required></div>
         <div class="field"><label>Selling price (${CURRENCY})</label><input name="price" type="number" step="0.01" min="0" placeholder="0.00" required></div>
         <div class="field"><label>Profit per unit</label><div class="readout" id="catProfitReadout">${CURRENCY} 0.00</div></div>
       </form>
+      <p style="color:var(--text-faint);font-size:12px;line-height:1.6;margin:10px 0 0;">Importing this bag from China? Log an import batch further down — it works out the true landed cost per bag (bag + shipping + other fees), and you can apply that here with one tap before deciding your selling price.</p>
       <div class="form-actions"><button class="btn btn-primary" id="catSubmit">${iconPlus()} Add category</button></div>
     </div>
 
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Bag Category</th><th class="num">Production Cost</th><th class="num">Selling Price</th><th class="num">Profit / Unit</th><th></th>
+          <th>Bag Category</th><th class="num">Cost / Bag</th><th class="num">Selling Price</th><th class="num">Profit / Unit</th><th></th>
         </tr></thead>
         <tbody>
           ${rows.length ? rows.map(c=>{
@@ -996,6 +1095,99 @@ function renderCategories(){
               </div></td>
             </tr>
           `;}).join("") : `<tr class="empty-row"><td colspan="5">No bag categories yet. Add your first one above.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title">China imports — capital tracking</div>
+    <div class="grid kpi-grid" style="margin-bottom:16px;">
+      <div class="card kpi-card"><div class="kpi-label">Total Capital Invested</div><div class="kpi-value">${fmt(stockTotals.invested)}</div><div class="kpi-sub">All import shipments, all-time</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Capital Recovered</div><div class="kpi-value good">${fmt(stockTotals.recovered)}</div><div class="kpi-sub">From bags sold, net of returns</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Capital Still In Stock</div><div class="kpi-value">${fmt(stockTotals.pending)}</div><div class="kpi-sub">Tied up in unsold bags</div></div>
+      <div class="card kpi-card"><div class="kpi-label">Bags In Stock</div><div class="kpi-value">${stockTotals.stockQty}</div><div class="kpi-sub">Imported − net sold</div></div>
+    </div>
+
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+      <div>
+        <h3 style="font-size:15px;margin-bottom:4px;">Import shipments</h3>
+        <p style="color:var(--text-dim);font-size:12.5px;margin:0;">One shipment can cover several bag types at once, with shared shipping/transport costs split evenly per bag.</p>
+      </div>
+      ${state.categories.length ? `<button class="btn btn-primary" id="btnLogShipment">${iconPlus()} Log import shipment</button>` : `<span style="font-size:12.5px;color:var(--text-faint);">Add a bag category first</span>`}
+    </div>
+
+    ${importRows.length ? importRows.map(imp=>{
+      const totalQty = importShipmentTotalQty(imp);
+      const sharedTotal = importShipmentSharedCost(imp);
+      const sharedPerBag = importShipmentSharedPerBag(imp);
+      const grandTotal = importShipmentTotalCost(imp);
+      return `
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+          <div>
+            <div style="font-weight:600;font-size:13.5px;">${imp.date}${imp.note ? ' — ' + esc(imp.note) : ''}</div>
+            <div style="font-size:11.5px;color:var(--text-faint);margin-top:3px;">
+              ${totalQty} bags total · Domestic ${fmt(imp.domesticCost||0)} · Shipping ${fmt(imp.shippingCost||0)}${Number(imp.otherCost||0)>0?' · Other '+fmt(imp.otherCost):''} · Shared/bag ${fmt(sharedPerBag)}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="text-align:right;">
+              <div style="font-size:11px;color:var(--text-faint);">Shipment total</div>
+              <div style="font-weight:700;font-size:14px;">${fmt(grandTotal)}</div>
+            </div>
+            <div class="row-actions">
+              <button class="icon-btn" data-edit-shipment="${imp.id}" title="Edit shipment">${iconEdit()}</button>
+              <button class="icon-btn" data-del-shipment="${imp.id}" title="Delete shipment">${iconTrash()}</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Bag Category</th><th class="num">Qty</th><th class="num">Type Payment</th>
+              <th class="num">Shared Cost Share</th><th class="num">Landed Cost/Bag</th><th class="num">Total Landed Cost</th><th></th>
+            </tr></thead>
+            <tbody>
+              ${(imp.items||[]).map(item=>{
+                const cat = state.categories.find(c=>c.id===item.categoryId);
+                const landed = importItemLandedCost(imp, item);
+                return `<tr>
+                  <td class="strong">${cat?esc(cat.name):'<span style="color:var(--bad)">Deleted category</span>'}</td>
+                  <td class="num">${item.qty}</td>
+                  <td class="num">${fmt(item.totalPayment)}</td>
+                  <td class="num">${fmt(sharedPerBag * importItemQty(item))}</td>
+                  <td class="num strong">${fmt(landed)}</td>
+                  <td class="num">${fmt(importItemTotalLandedCost(imp, item))}</td>
+                  <td>${cat ? `<button class="btn btn-sm btn-ghost" data-apply-cost="${cat.id}" data-cost-value="${getCategoryStock(cat.id).avgLandedCost}">Use as cost</button>` : ''}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      `;
+    }).join("") : `<div class="card" style="color:var(--text-dim);font-size:13.5px;">No import shipments logged yet. Use "Log import shipment" above to add one.</div>`}
+
+    <div class="section-title">Stock &amp; capital by category</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Bag Category</th><th class="num">Imported</th><th class="num">Net Sold</th><th class="num">In Stock</th>
+          <th class="num">Avg Landed Cost</th><th class="num">Capital Invested</th><th class="num">Recovered</th><th class="num">In Stock (${CURRENCY})</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${categoryStockRows.length ? categoryStockRows.map(({c,s})=>`
+            <tr>
+              <td class="strong">${esc(c.name)}</td>
+              <td class="num">${s.totalImportedQty}</td>
+              <td class="num">${s.netSoldQty}</td>
+              <td class="num">${s.stockQty}</td>
+              <td class="num">${fmt(s.avgLandedCost)}</td>
+              <td class="num">${fmt(s.totalInvested)}</td>
+              <td class="num" style="color:var(--good)">${fmt(s.capitalRecovered)}</td>
+              <td class="num">${fmt(s.capitalPending)}</td>
+              <td><button class="btn btn-sm btn-ghost" data-apply-cost="${c.id}" data-cost-value="${s.avgLandedCost}">Use as cost</button></td>
+            </tr>
+          `).join("") : `<tr class="empty-row"><td colspan="9">No import shipments logged yet — nothing to summarize.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -2180,6 +2372,246 @@ function openPaymentModal(preselectedTailorId = ""){
   });
 }
 
+function openImportShipmentModal(){
+  if(!state.categories.length){ toast("Please add at least one bag category first."); return; }
+
+  showModal(`
+    <h3>Log Import Shipment</h3>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:12px;">Add every bag type in this shipment with what you paid for it, then the shared costs below — they'll be split evenly per bag across all types.</p>
+
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+      <div class="field"><label>Shipment date *</label><input type="date" id="shipDate" value="${todayStr()}" required></div>
+      <div class="field"><label>Note (optional)</label><input type="text" id="shipNote" placeholder="e.g. August container"></div>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:14px 0 6px;">Bag types in this shipment</div>
+    <div class="table-wrap" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-soft);border-radius:var(--radius-sm);">
+      <table class="batch-assign-table">
+        <thead>
+          <tr>
+            <th style="width:40%;">Bag Category *</th>
+            <th style="width:22%;text-align:right;">Qty *</th>
+            <th style="width:30%;text-align:right;">Total Payment (${CURRENCY}) *</th>
+            <th style="width:8%;"></th>
+          </tr>
+        </thead>
+        <tbody id="shipItemsBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btnAddShipItem">${iconPlus()} Add another bag type</button>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px;">Shared costs for this whole shipment</div>
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+      <div class="field"><label>Domestic transport (${CURRENCY})</label><input type="number" step="0.01" min="0" id="shipDomestic" value="0"></div>
+      <div class="field"><label>International shipping (${CURRENCY})</label><input type="number" step="0.01" min="0" id="shipShipping" value="0"></div>
+      <div class="field"><label>Other costs (${CURRENCY})</label><input type="number" step="0.01" min="0" id="shipOther" value="0"></div>
+    </div>
+
+    <div style="margin-top:14px;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);font-size:12.5px;color:var(--text-dim);" id="shipSummaryReadout"></div>
+
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSubmitShipment">${iconPlus()} Save shipment</button>
+    </div>
+  `, "modal-lg");
+
+  const tbody = document.getElementById("shipItemsBody");
+
+  const createItemRow = (catId = "", qty = "", payment = "")=>{
+    const tr = document.createElement("tr");
+    const catOpts = state.categories.map(c => `<option value="${c.id}" ${c.id===catId?'selected':''}>${esc(c.name)}</option>`).join("");
+    tr.innerHTML = `
+      <td><select class="ship-item-cat" required>${catOpts}</select></td>
+      <td><input type="number" class="ship-item-qty" min="1" value="${qty}" required style="text-align:right;"></td>
+      <td><input type="number" step="0.01" min="0" class="ship-item-payment" value="${payment}" required style="text-align:right;"></td>
+      <td style="text-align:center;"><button type="button" class="icon-btn ship-item-del" title="Remove row">${iconTrash()}</button></td>
+    `;
+    tr.querySelector(".ship-item-del").addEventListener("click", ()=>{
+      if(tbody.querySelectorAll("tr").length > 1){ tr.remove(); updateShipSummary(); }
+      else{ toast("A shipment needs at least one bag type."); }
+    });
+    tr.querySelectorAll("input, select").forEach(inp => inp.addEventListener("input", updateShipSummary));
+    tbody.appendChild(tr);
+    updateShipSummary();
+  };
+
+  const updateShipSummary = ()=>{
+    let totalQty = 0, totalPayment = 0;
+    tbody.querySelectorAll("tr").forEach(tr=>{
+      totalQty += Number(tr.querySelector(".ship-item-qty")?.value)||0;
+      totalPayment += Number(tr.querySelector(".ship-item-payment")?.value)||0;
+    });
+    const shared = (Number(document.getElementById("shipDomestic")?.value)||0)
+      + (Number(document.getElementById("shipShipping")?.value)||0)
+      + (Number(document.getElementById("shipOther")?.value)||0);
+    const sharedPerBag = totalQty > 0 ? shared/totalQty : 0;
+    const grandTotal = totalPayment + shared;
+    const readout = document.getElementById("shipSummaryReadout");
+    if(readout){
+      readout.innerHTML = `<strong>${totalQty} bags total</strong> · Bag payments ${fmt(totalPayment)} · Shared costs ${fmt(shared)} (${fmt(sharedPerBag)}/bag) · <strong>Shipment total ${fmt(grandTotal)}</strong>`;
+    }
+  };
+
+  createItemRow(state.categories[0]?.id || "", 1, "");
+  document.getElementById("btnAddShipItem").addEventListener("click", ()=> createItemRow(state.categories[0]?.id || "", 1, ""));
+  ["shipDomestic","shipShipping","shipOther"].forEach(id=>{
+    document.getElementById(id).addEventListener("input", updateShipSummary);
+  });
+
+  document.getElementById("btnSubmitShipment").addEventListener("click", ()=>{
+    const date = document.getElementById("shipDate").value || todayStr();
+    const note = document.getElementById("shipNote").value.trim();
+    const domesticCost = Number(document.getElementById("shipDomestic").value)||0;
+    const shippingCost = Number(document.getElementById("shipShipping").value)||0;
+    const otherCost = Number(document.getElementById("shipOther").value)||0;
+
+    const items = [];
+    let valid = true;
+    tbody.querySelectorAll("tr").forEach(tr=>{
+      const categoryId = tr.querySelector(".ship-item-cat").value;
+      const qty = Number(tr.querySelector(".ship-item-qty").value)||0;
+      const totalPayment = Number(tr.querySelector(".ship-item-payment").value)||0;
+      if(!categoryId || qty <= 0){ valid = false; return; }
+      items.push({ id: uid(), categoryId, qty, totalPayment });
+    });
+    if(!valid || !items.length){ toast("Each bag type needs a category and a quantity of at least 1."); return; }
+
+    state.imports.push({ id: uid(), date, note, domesticCost, shippingCost, otherCost, items });
+    saveState(); closeModal(); toast("Import shipment logged"); render();
+  });
+}
+
+function openEditImportShipmentModal(shipmentId){
+  const imp = state.imports.find(i => i.id === shipmentId);
+  if(!imp){ toast("Shipment not found"); return; }
+  if(!state.categories.length){ toast("Please add at least one bag category first."); return; }
+
+  showModal(`
+    <h3>Edit Import Shipment</h3>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:12px;">Update bag types and shared costs. Changes are split evenly per bag across all types.</p>
+
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+      <div class="field"><label>Shipment date *</label><input type="date" id="shipDate" value="${imp.date || todayStr()}" required></div>
+      <div class="field"><label>Note (optional)</label><input type="text" id="shipNote" value="${esc(imp.note || '')}" placeholder="e.g. August container"></div>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:14px 0 6px;">Bag types in this shipment</div>
+    <div class="table-wrap" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-soft);border-radius:var(--radius-sm);">
+      <table class="batch-assign-table">
+        <thead>
+          <tr>
+            <th style="width:40%;">Bag Category *</th>
+            <th style="width:22%;text-align:right;">Qty *</th>
+            <th style="width:30%;text-align:right;">Total Payment (${CURRENCY}) *</th>
+            <th style="width:8%;"></th>
+          </tr>
+        </thead>
+        <tbody id="shipItemsBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btnAddShipItem">${iconPlus()} Add another bag type</button>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px;">Shared costs for this whole shipment</div>
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+      <div class="field"><label>Domestic transport (${CURRENCY})</label><input type="number" step="0.01" min="0" id="shipDomestic" value="${imp.domesticCost || 0}"></div>
+      <div class="field"><label>International shipping (${CURRENCY})</label><input type="number" step="0.01" min="0" id="shipShipping" value="${imp.shippingCost || 0}"></div>
+      <div class="field"><label>Other costs (${CURRENCY})</label><input type="number" step="0.01" min="0" id="shipOther" value="${imp.otherCost || 0}"></div>
+    </div>
+
+    <div style="margin-top:14px;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);font-size:12.5px;color:var(--text-dim);" id="shipSummaryReadout"></div>
+
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSubmitShipment">${iconEdit()} Update shipment</button>
+    </div>
+  `, "modal-lg");
+
+  const tbody = document.getElementById("shipItemsBody");
+
+  const createItemRow = (catId = "", qty = "", payment = "")=>{
+    const tr = document.createElement("tr");
+    const catOpts = state.categories.map(c => `<option value="${c.id}" ${c.id===catId?'selected':''}>${esc(c.name)}</option>`).join("");
+    tr.innerHTML = `
+      <td><select class="ship-item-cat" required>${catOpts}</select></td>
+      <td><input type="number" class="ship-item-qty" min="1" value="${qty}" required style="text-align:right;"></td>
+      <td><input type="number" step="0.01" min="0" class="ship-item-payment" value="${payment}" required style="text-align:right;"></td>
+      <td style="text-align:center;"><button type="button" class="icon-btn ship-item-del" title="Remove row">${iconTrash()}</button></td>
+    `;
+    tr.querySelector(".ship-item-del").addEventListener("click", ()=>{
+      if(tbody.querySelectorAll("tr").length > 1){ tr.remove(); updateShipSummary(); }
+      else{ toast("A shipment needs at least one bag type."); }
+    });
+    tr.querySelectorAll("input, select").forEach(inp => inp.addEventListener("input", updateShipSummary));
+    tbody.appendChild(tr);
+    updateShipSummary();
+  };
+
+  const updateShipSummary = ()=>{
+    let totalQty = 0, totalPayment = 0;
+    tbody.querySelectorAll("tr").forEach(tr=>{
+      totalQty += Number(tr.querySelector(".ship-item-qty")?.value)||0;
+      totalPayment += Number(tr.querySelector(".ship-item-payment")?.value)||0;
+    });
+    const shared = (Number(document.getElementById("shipDomestic")?.value)||0)
+      + (Number(document.getElementById("shipShipping")?.value)||0)
+      + (Number(document.getElementById("shipOther")?.value)||0);
+    const sharedPerBag = totalQty > 0 ? shared/totalQty : 0;
+    const grandTotal = totalPayment + shared;
+    const readout = document.getElementById("shipSummaryReadout");
+    if(readout){
+      readout.innerHTML = `<strong>${totalQty} bags total</strong> · Bag payments ${fmt(totalPayment)} · Shared costs ${fmt(shared)} (${fmt(sharedPerBag)}/bag) · <strong>Shipment total ${fmt(grandTotal)}</strong>`;
+    }
+  };
+
+  // Load existing items
+  (imp.items || []).forEach(item => {
+    createItemRow(item.categoryId, item.qty, item.totalPayment);
+  });
+
+  // If no items exist, add a blank row
+  if((imp.items || []).length === 0){
+    createItemRow(state.categories[0]?.id || "", 1, "");
+  }
+
+  document.getElementById("btnAddShipItem").addEventListener("click", ()=> createItemRow(state.categories[0]?.id || "", 1, ""));
+  ["shipDomestic","shipShipping","shipOther"].forEach(id=>{
+    document.getElementById(id).addEventListener("input", updateShipSummary);
+  });
+
+  document.getElementById("btnSubmitShipment").addEventListener("click", ()=>{
+    const date = document.getElementById("shipDate").value || todayStr();
+    const note = document.getElementById("shipNote").value.trim();
+    const domesticCost = Number(document.getElementById("shipDomestic").value)||0;
+    const shippingCost = Number(document.getElementById("shipShipping").value)||0;
+    const otherCost = Number(document.getElementById("shipOther").value)||0;
+
+    const items = [];
+    let valid = true;
+    tbody.querySelectorAll("tr").forEach(tr=>{
+      const categoryId = tr.querySelector(".ship-item-cat").value;
+      const qty = Number(tr.querySelector(".ship-item-qty").value)||0;
+      const totalPayment = Number(tr.querySelector(".ship-item-payment").value)||0;
+      if(!categoryId || qty <= 0){ valid = false; return; }
+      items.push({ id: uid(), categoryId, qty, totalPayment });
+    });
+    if(!valid || !items.length){ toast("Each bag type needs a category and a quantity of at least 1."); return; }
+
+    // Update the existing shipment
+    imp.date = date;
+    imp.note = note;
+    imp.domesticCost = domesticCost;
+    imp.shippingCost = shippingCost;
+    imp.otherCost = otherCost;
+    imp.items = items;
+
+    saveState(); closeModal(); toast("Shipment updated"); render();
+  });
+}
+
 function openAssignModal(preselectedTailorId = ""){
   if(!state.tailors.length){ toast("Please add a tailor first."); return; }
   if(!state.categories.length){ toast("Please add at least one bag category first."); return; }
@@ -2671,6 +3103,28 @@ function bindTabEvents(){
         saveState(); closeModal(); toast("Category updated"); render();
       });
     }));
+
+    const btnLogShipment = document.getElementById("btnLogShipment");
+    if(btnLogShipment) btnLogShipment.addEventListener("click", ()=> openImportShipmentModal());
+
+    document.querySelectorAll("[data-edit-shipment]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.editShipment;
+      openEditImportShipmentModal(id);
+    }));
+
+    document.querySelectorAll("[data-del-shipment]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.delShipment;
+      confirmDelete("This entire import shipment (all bag types in it) will be removed and no longer count toward capital invested or stock.", ()=>{
+        state.imports = state.imports.filter(i=>i.id!==id);
+        saveState(); toast("Shipment deleted"); render();
+      });
+    }));
+    document.querySelectorAll("[data-apply-cost]").forEach(b=> b.addEventListener("click", ()=>{
+      const cat = state.categories.find(c=>c.id===b.dataset.applyCost);
+      if(!cat) return;
+      cat.cost = Number(b.dataset.costValue)||0;
+      saveState(); toast(`Cost/bag for "${cat.name}" set to ${fmt(cat.cost)}`); render();
+    }));
   }
 
   if(currentTab === "orders"){
@@ -3110,6 +3564,7 @@ async function onSignedIn(user){
   document.querySelectorAll(".hide-until-auth").forEach(el=> el.classList.remove("hide-until-auth"));
   setSyncStatus("syncing");
   state = await loadRemoteState();
+  state.imports = migrateImports(state.imports);
   setSyncStatus(syncState === "error" ? "error" : "ok");
   saveLocalState();
   currentTab = "dashboard";
