@@ -790,29 +790,29 @@ function renderDashboard(){
   const monthlyData = Array.from({length:12},(_,i)=>{
     const key = selectedYear + "-" + String(i+1).padStart(2,"0");
     return { label: new Date(Number(selectedYear),i,1).toLocaleDateString("en-US",{month:"short"}),
-      value: state.orders.filter(o=>monthKey(o.date)===key && matches(o)).length };
+      value: state.orders.filter(o=>monthKey(o.date)===key && matches(o)).reduce((s,o)=>s+(Number(o.qty)||0),0) };
   });
 
   const daysInMonth = new Date(Number(selectedYear), Number(selectedMonthNum), 0).getDate();
   const dailyData = Array.from({length:daysInMonth},(_,i)=>{
     const day=String(i+1).padStart(2,"0"), key=selectedMonth+"-"+day;
-    return {label:String(i+1), value:monthOrders.filter(o=>o.date===key).length};
+    return {label:String(i+1), value:monthOrders.filter(o=>o.date===key).reduce((s,o)=>s+(Number(o.qty)||0),0)};
   });
 
   const weeklyData = Array.from({length:5},(_,i)=>{
     const from=i*7+1, to=Math.min((i+1)*7,daysInMonth);
-    return {label:`W${i+1}`, value:monthOrders.filter(o=>{ const d=Number((o.date||"").slice(8,10)); return d>=from&&d<=to; }).length, range:`${from}–${to}`};
+    return {label:`W${i+1}`, value:monthOrders.filter(o=>{ const d=Number((o.date||"").slice(8,10)); return d>=from&&d<=to; }).reduce((s,o)=>s+(Number(o.qty)||0),0), range:`${from}–${to}`};
   }).filter(w=>Number(w.range.split("–")[0])<=daysInMonth);
 
   const categoryMonthData = categories.map(c=>({
     label:c.name,
-    value:monthOrders.filter(o=>o.categoryId===c.id).length
+    value:monthOrders.filter(o=>o.categoryId===c.id).reduce((s,o)=>s+(Number(o.qty)||0),0)
   })).sort((a,b)=>b.value-a.value);
 
-  const monthlyChart = renderSvgLineChart(monthlyData,"Monthly total orders",`${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"Selected category")} · order count`);
-  const dailyChart = renderSvgBarChart(dailyData,"Daily total orders",`${monthLabel(selectedMonth)} · ${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"")} · order count`);
-  const weeklyChart = renderSvgBarChart(weeklyData.map(x=>({...x,label:x.label+" ("+x.range+")"})),"Weekly total orders",`${monthLabel(selectedMonth)} · ${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"")}`);
-  const categoryChart = renderSvgBarChart(categoryMonthData,"Category-wise orders",monthLabel(selectedMonth));
+  const monthlyChart = renderSvgLineChart(monthlyData,"Monthly total orders",`${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"Selected category")} · bags sold`);
+  const dailyChart = renderSvgBarChart(dailyData,"Daily total orders",`${monthLabel(selectedMonth)} · ${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"")} · bags sold`);
+  const weeklyChart = renderSvgBarChart(weeklyData.map(x=>({...x,label:x.label+" ("+x.range+")"})),"Weekly total orders",`${monthLabel(selectedMonth)} · ${selectedCategory==="all"?"All categories":(categories.find(c=>c.id===selectedCategory)?.name||"")} · bags sold`);
+  const categoryChart = renderSvgBarChart(categoryMonthData,"Category-wise orders",`${monthLabel(selectedMonth)} · bags sold`);
 
   return `
     <div class="card analytics-filter-card">
@@ -884,13 +884,13 @@ function renderSvgLineChart(data,title,subtitle){
   const pts=data.map((d,i)=>{const x=L+(data.length===1?pw/2:i*pw/(data.length-1)); const y=T+ph-(Number(d.value)||0)/max*ph; return {...d,x,y};});
   const grid=[0,0.25,0.5,0.75,1].map(v=>{const y=T+ph-v*ph; return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="var(--border-soft)"/><text x="${L-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--text-faint)">${Math.round(max*v)}</text>`;}).join("");
   const path=pts.map((p,i)=>(i?"L":"M")+`${p.x},${p.y}`).join(" ");
-  const labels=pts.map(p=>`<text x="${p.x}" y="${H-16}" text-anchor="middle" font-size="10" fill="var(--text-faint)">${esc(p.label)}</text><circle cx="${p.x}" cy="${p.y}" r="3.5" fill="var(--accent)"/><title>${esc(p.label)}: ${p.value} orders</title>`).join("");
+  const labels=pts.map(p=>`<text x="${p.x}" y="${H-16}" text-anchor="middle" font-size="10" fill="var(--text-faint)">${esc(p.label)}</text><circle cx="${p.x}" cy="${p.y}" r="3.5" fill="var(--accent)"/><title>${esc(p.label)}: ${p.value} bags</title>`).join("");
   return `<div class="svg-chart-head"><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div><svg class="analytics-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${grid}<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${labels}</svg>`;
 }
 function renderSvgBarChart(data,title,subtitle){
   const W=900,H=300,L=48,R=18,T=36,B=54,pw=W-L-R,ph=H-T-B,max=chartAxisMax(data),gap=Math.min(10,pw/data.length*.18),bw=Math.max(4,pw/data.length-gap);
   const grid=[0,0.25,0.5,0.75,1].map(v=>{const y=T+ph-v*ph; return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="var(--border-soft)"/><text x="${L-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--text-faint)">${Math.round(max*v)}</text>`;}).join("");
-  const bars=data.map((d,i)=>{const val=Number(d.value)||0,h=val/max*ph,x=L+i*(pw/data.length)+(gap/2),y=T+ph-h; const showLabel=data.length<=12||i%2===0; return `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1)}" rx="3" fill="var(--accent)" opacity=".88"><title>${esc(d.label)}: ${val} orders</title></rect>${showLabel?`<text x="${x+bw/2}" y="${H-17}" text-anchor="middle" font-size="9.5" fill="var(--text-faint)">${esc(d.label)}</text>`:""}`;}).join("");
+  const bars=data.map((d,i)=>{const val=Number(d.value)||0,h=val/max*ph,x=L+i*(pw/data.length)+(gap/2),y=T+ph-h; const showLabel=data.length<=12||i%2===0; return `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h,1)}" rx="3" fill="var(--accent)" opacity=".88"><title>${esc(d.label)}: ${val} bags</title></rect>${showLabel?`<text x="${x+bw/2}" y="${H-17}" text-anchor="middle" font-size="9.5" fill="var(--text-faint)">${esc(d.label)}</text>`:""}`;}).join("");
   return `<div class="svg-chart-head"><strong>${esc(title)}</strong><span>${esc(subtitle)}</span></div><svg class="analytics-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">${grid}${bars}</svg>`;
 }
 
@@ -1583,7 +1583,51 @@ function monthOrRangeLabel(start,end){
 function renderFinance(){
   const incRows = [...state.income].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
   const expRows = [...state.expenses].sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+  
+  // Calculate totals
+  const totalIncome = state.income.reduce((sum, i) => sum + (Number(i.amount)||0), 0);
+  const totalExpenses = state.expenses.reduce((sum, e) => sum + (Number(e.amount)||0), 0);
+  const netBalance = totalIncome - totalExpenses;
+  
+  // Calculate type-wise breakdown for income
+  const incomeByType = {};
+  state.income.forEach(i => {
+    const type = i.type || "Other";
+    incomeByType[type] = (incomeByType[type] || 0) + (Number(i.amount)||0);
+  });
+  const incomeTypeData = Object.entries(incomeByType)
+    .map(([type, amount]) => ({ type, amount, count: state.income.filter(i => i.type === type).length }))
+    .sort((a, b) => b.amount - a.amount);
+  
+  // Calculate type-wise breakdown for expenses
+  const expensesByType = {};
+  state.expenses.forEach(e => {
+    const type = e.type || "Other";
+    expensesByType[type] = (expensesByType[type] || 0) + (Number(e.amount)||0);
+  });
+  const expenseTypeData = Object.entries(expensesByType)
+    .map(([type, amount]) => ({ type, amount, count: state.expenses.filter(e => e.type === type).length }))
+    .sort((a, b) => b.amount - a.amount);
+  
   return `
+    <div class="grid kpi-grid" style="margin-bottom:22px;">
+      <div class="card kpi-card">
+        <div class="kpi-label">Total Income</div>
+        <div class="kpi-value good">${fmt(totalIncome)}</div>
+        <div class="kpi-sub">${state.income.length} entr${state.income.length===1?'y':'ies'}</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Total Expenses</div>
+        <div class="kpi-value bad">${fmt(totalExpenses)}</div>
+        <div class="kpi-sub">${state.expenses.length} entr${state.expenses.length===1?'y':'ies'}</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Net Balance</div>
+        <div class="kpi-value ${netBalance>=0?'good':'bad'}">${fmt(netBalance)}</div>
+        <div class="kpi-sub">Income − Expenses</div>
+      </div>
+    </div>
+
     <div class="two-col">
       <div>
         <div class="card form-card">
@@ -1647,6 +1691,52 @@ function renderFinance(){
         </div>
       </div>
     </div>
+
+    ${incomeTypeData.length > 0 ? `
+    <div class="section-title">Income breakdown by type</div>
+    <div class="table-wrap" style="margin-bottom:22px;">
+      <table>
+        <thead><tr><th>Income Type</th><th class="num">Count</th><th class="num">Total Amount</th></tr></thead>
+        <tbody>
+          ${incomeTypeData.map(d => `
+            <tr>
+              <td class="strong">${esc(d.type)}</td>
+              <td class="num">${d.count}</td>
+              <td class="num" style="color:var(--good)">${fmt(d.amount)}</td>
+            </tr>
+          `).join("")}
+          <tr style="border-top:2px solid var(--border);font-weight:600;">
+            <td class="strong">Total</td>
+            <td class="num">${state.income.length}</td>
+            <td class="num" style="color:var(--good)">${fmt(totalIncome)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
+
+    ${expenseTypeData.length > 0 ? `
+    <div class="section-title">Expense breakdown by type</div>
+    <div class="table-wrap" style="margin-bottom:22px;">
+      <table>
+        <thead><tr><th>Expense Type</th><th class="num">Count</th><th class="num">Total Amount</th></tr></thead>
+        <tbody>
+          ${expenseTypeData.map(d => `
+            <tr>
+              <td class="strong">${esc(d.type)}</td>
+              <td class="num">${d.count}</td>
+              <td class="num" style="color:var(--bad)">${fmt(d.amount)}</td>
+            </tr>
+          `).join("")}
+          <tr style="border-top:2px solid var(--border);font-weight:600;">
+            <td class="strong">Total</td>
+            <td class="num">${state.expenses.length}</td>
+            <td class="num" style="color:var(--bad)">${fmt(totalExpenses)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    ` : ''}
   `;
 }
 
