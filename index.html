@@ -101,6 +101,12 @@
     padding: 9px 10px; border-radius: var(--radius-sm); font-size:14px; outline:none;
     transition: border-color .12s ease;
   }
+  /* Date/time inputs render as one native text+icon control we can't restyle internally — trim
+     the right padding so the icon has room and doesn't crowd/overlap the value text once the
+     field gets squeezed narrow (see the mobile "full row" rule for these below too). */
+  .field input[type="date"], .field input[type="time"], .field input[type="datetime-local"]{
+    padding-right: 4px; min-width: 0;
+  }
   .field input:focus, .field select:focus, .field textarea:focus{ border-color: var(--accent-dim); }
   .field .readout{ font-size:14px; color: var(--accent); padding-top:9px; font-family:'Fraunces',serif; font-weight:600; }
   .form-actions{ display:flex; gap:10px; margin-top:14px; justify-content:flex-end; }
@@ -296,6 +302,11 @@
     /* Any inline two-column form grids collapse to one column */
     .form-grid[style*="1fr 1fr"],
     .form-grid[style*="repeat(auto-fit"]{ grid-template-columns: 1fr !important; }
+
+    /* Date fields squeezed into a narrow auto-fit grid column don't leave the native iOS date
+       widget (value text + calendar icon) enough room, so the two visually overlap. Give every
+       date field the full row on small screens instead of sharing a column with its neighbours. */
+    .field:has(> input[type="date"]){ grid-column: 1 / -1; }
 
     .form-actions{ flex-direction:column-reverse; align-items:stretch; gap:8px; }
     .form-actions .btn{ width:100%; }
@@ -2519,12 +2530,16 @@ function renderOrders(){
         <div class="form-grid" style="margin-top:12px;">
           <div class="field" style="grid-column:1/-1;"><label>Address</label><input name="customerAddress" required></div>
           <div class="field"><label>District</label>
-            <select id="orderDistrictSelect" name="district" required>
-              <option value="">${k.districts.length ? 'Select…' : 'Fetch districts above first'}</option>
-              ${renderDistrictOptionsHtml()}
-            </select>
+            <input type="text" id="orderDistrictInput" list="orderDistrictList" autocomplete="off" required
+              placeholder="${k.districts.length ? 'Search district…' : 'Fetch districts above first'}">
+            <datalist id="orderDistrictList">${districtDatalistOptions()}</datalist>
+            <input type="hidden" name="district" id="orderDistrictIdInput">
           </div>
-          <div class="field"><label>City</label><select id="orderCitySelect" name="city" required><option value="">Select a district first</option></select></div>
+          <div class="field"><label>City</label>
+            <input type="text" id="orderCityInput" list="orderCityList" autocomplete="off" required disabled placeholder="Select a district first">
+            <datalist id="orderCityList"></datalist>
+            <input type="hidden" name="city" id="orderCityIdInput">
+          </div>
         </div>
 
         <div class="section-title">Bag Details</div>
@@ -2589,20 +2604,27 @@ function renderOrderDraftItems(){
   `;
 }
 
-function renderDistrictOptionsHtml(selectedId){
-  const list = (state.settings.koombiyo.districts||[]);
-  return list.map(d=>{
-    const id = koombiyoDistrictId(d), name = koombiyoDistrictName(d);
-    return `<option value="${esc(id)}" ${String(selectedId||"")===id?'selected':''}>${esc(name)}</option>`;
-  }).join("");
+// District/City pickers are search-as-you-type text inputs backed by a <datalist> of names (see
+// the "Address" fields in the Add/Edit Order forms) rather than plain <select> — much faster to
+// use once the koombiyo district/city lists get long. These render the <option> name list; the
+// matching find* helpers below resolve a typed/selected name back to its Koombiyo id.
+function districtDatalistOptions(){
+  return (state.settings.koombiyo.districts||[]).map(d=>`<option value="${esc(koombiyoDistrictName(d))}">`).join("");
 }
-function renderCityOptionsHtml(districtId, selectedId){
-  const entry = (state.settings.koombiyo.cities||{})[districtId];
-  const list = entry?.list || [];
-  return list.map(c=>{
-    const id = koombiyoCityId(c), name = koombiyoCityName(c);
-    return `<option value="${esc(id)}" ${String(selectedId||"")===id?'selected':''}>${esc(name)}</option>`;
-  }).join("");
+function cityDatalistOptions(districtId){
+  const list = ((state.settings.koombiyo.cities||{})[districtId]||{}).list || [];
+  return list.map(c=>`<option value="${esc(koombiyoCityName(c))}">`).join("");
+}
+function findDistrictByName(name){
+  const q = String(name||"").trim().toLowerCase();
+  if(!q) return null;
+  return (state.settings.koombiyo.districts||[]).find(d=> koombiyoDistrictName(d).toLowerCase()===q) || null;
+}
+function findCityByName(districtId, name){
+  const q = String(name||"").trim().toLowerCase();
+  if(!q || !districtId) return null;
+  const list = ((state.settings.koombiyo.cities||{})[districtId]||{}).list || [];
+  return list.find(c=> koombiyoCityName(c).toLowerCase()===q) || null;
 }
 
 // Matches the Logged Orders search box against waybill ID, customer name and phone number.
@@ -5185,32 +5207,46 @@ function bindTabEvents(){
         btn.disabled = false; btn.textContent = "Fetch";
       });
 
-      const districtSel = document.getElementById("orderDistrictSelect");
-      const citySel = document.getElementById("orderCitySelect");
-      districtSel?.addEventListener("change", async ()=>{
-        const distId = districtSel.value;
+      const districtInput = document.getElementById("orderDistrictInput");
+      const districtIdInput = document.getElementById("orderDistrictIdInput");
+      const cityInput = document.getElementById("orderCityInput");
+      const cityIdInput = document.getElementById("orderCityIdInput");
+      const cityListEl = document.getElementById("orderCityList");
+      districtInput?.addEventListener("input", async ()=>{
+        const match = findDistrictByName(districtInput.value);
+        const distId = match ? koombiyoDistrictId(match) : "";
+        districtIdInput.value = distId;
+
         const deliveryInp = document.getElementById("ordDeliveryChargeInput");
         if(deliveryInp && !deliveryInp.dataset.userEdited){
           const suggested = deliveryChargeForDistrict(distId);
           deliveryInp.value = suggested!=null ? suggested : state.settings.defaultDelivery;
           updateOrderFormReadout();
         }
-        if(!distId){ citySel.innerHTML = `<option value="">Select a district first</option>`; return; }
-        citySel.disabled = true;
-        citySel.innerHTML = `<option value="">Loading…</option>`;
+
+        cityInput.value = ""; cityIdInput.value = ""; cityListEl.innerHTML = "";
+        if(!distId){ cityInput.disabled = true; cityInput.placeholder = "Select a district first"; return; }
+        cityInput.disabled = true; cityInput.placeholder = "Loading…";
         try{
           await ensureCitiesLoaded(distId);
-          citySel.innerHTML = `<option value="">Select…</option>` + renderCityOptionsHtml(distId);
+          cityListEl.innerHTML = cityDatalistOptions(distId);
+          cityInput.placeholder = "Search city…";
         }catch(e){
-          citySel.innerHTML = `<option value="">Could not load cities</option>`;
+          cityInput.placeholder = "Could not load cities";
           toast(e.message || "Could not load cities");
         }
-        citySel.disabled = false;
+        cityInput.disabled = false;
+      });
+      cityInput?.addEventListener("input", ()=>{
+        const match = findCityByName(districtIdInput.value, cityInput.value);
+        cityIdInput.value = match ? koombiyoCityId(match) : "";
       });
 
       document.getElementById("orderSubmit")?.addEventListener("click", (e)=>{
         e.preventDefault();
         if(!form.reportValidity()) return;
+        if(!document.getElementById("orderDistrictIdInput").value){ toast("Pick a district from the suggestions list."); return; }
+        if(!document.getElementById("orderCityIdInput").value){ toast("Pick a city from the suggestions list."); return; }
         if(!orderDraftItems.length){ toast("Add at least one bag before submitting."); return; }
         // Insufficient stock is shown as a warning (see orderStockWarning box above) but no longer
         // blocks the order — some bags get made-to-order or sourced after the sale is logged.
@@ -5370,8 +5406,18 @@ function bindTabEvents(){
         <div class="field" style="margin-bottom:10px;"><label>Customer name</label><input id="editOrdCustName" value="${esc(o.customer.name||'')}"></div>
         <div class="field" style="margin-bottom:10px;"><label>Contact number</label><input id="editOrdCustPhone" value="${esc(o.customer.phone||'')}"></div>
         <div class="field" style="margin-bottom:16px;"><label>Address</label><input id="editOrdCustAddress" value="${esc(o.customer.address||'')}"></div>
-        <div class="field" style="margin-bottom:10px;"><label>District</label><select id="editOrdDistrict"><option value="">Select…</option>${renderDistrictOptionsHtml(o.customer.district)}</select></div>
-        <div class="field" style="margin-bottom:16px;"><label>City</label><select id="editOrdCity"><option value="">Select…</option>${renderCityOptionsHtml(o.customer.district, o.customer.city)}</select></div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>District</label>
+          <input type="text" id="editOrdDistrict" list="editOrdDistrictList" autocomplete="off" value="${esc(o.customer.districtName||'')}" placeholder="Search district…">
+          <datalist id="editOrdDistrictList">${districtDatalistOptions()}</datalist>
+          <input type="hidden" id="editOrdDistrictId" value="${esc(o.customer.district||'')}">
+        </div>
+        <div class="field" style="margin-bottom:16px;">
+          <label>City</label>
+          <input type="text" id="editOrdCity" list="editOrdCityList" autocomplete="off" value="${esc(o.customer.cityName||'')}" placeholder="Search city…" ${o.customer.district?'':'disabled'}>
+          <datalist id="editOrdCityList">${o.customer.district ? cityDatalistOptions(o.customer.district) : ''}</datalist>
+          <input type="hidden" id="editOrdCityId" value="${esc(o.customer.city||'')}">
+        </div>
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
           <button class="btn btn-primary" id="saveEditOrd">Save</button>
@@ -5379,33 +5425,50 @@ function bindTabEvents(){
       `, "modal-lg");
 
       document.getElementById("editOrdDelivery").addEventListener("input", (e)=>{ e.target.dataset.userEdited = "1"; });
-      document.getElementById("editOrdDistrict").addEventListener("change", async (e)=>{
-        const distId = e.target.value;
+      const editDistrictInput = document.getElementById("editOrdDistrict");
+      const editDistrictIdInput = document.getElementById("editOrdDistrictId");
+      const editCityInput = document.getElementById("editOrdCity");
+      const editCityIdInput = document.getElementById("editOrdCityId");
+      const editCityListEl = document.getElementById("editOrdCityList");
+      editDistrictInput.addEventListener("input", async ()=>{
+        const match = findDistrictByName(editDistrictInput.value);
+        const distId = match ? koombiyoDistrictId(match) : "";
+        editDistrictIdInput.value = distId;
+
         const deliveryInpEdit = document.getElementById("editOrdDelivery");
         if(deliveryInpEdit && !deliveryInpEdit.dataset.userEdited){
           const suggested = deliveryChargeForDistrict(distId);
           deliveryInpEdit.value = suggested!=null ? suggested : state.settings.defaultDelivery;
         }
-        const citySelEdit = document.getElementById("editOrdCity");
-        citySelEdit.innerHTML = `<option value="">Loading…</option>`;
-        if(!distId){ citySelEdit.innerHTML = `<option value="">Select…</option>`; return; }
+
+        editCityInput.value = ""; editCityIdInput.value = ""; editCityListEl.innerHTML = "";
+        if(!distId){ editCityInput.disabled = true; editCityInput.placeholder = "Select a district first"; return; }
+        editCityInput.disabled = true; editCityInput.placeholder = "Loading…";
         try{
           await ensureCitiesLoaded(distId);
-          citySelEdit.innerHTML = `<option value="">Select…</option>` + renderCityOptionsHtml(distId);
+          editCityListEl.innerHTML = cityDatalistOptions(distId);
+          editCityInput.placeholder = "Search city…";
         }catch(err){
-          citySelEdit.innerHTML = `<option value="">Could not load</option>`;
+          editCityInput.placeholder = "Could not load cities";
         }
+        editCityInput.disabled = false;
+      });
+      editCityInput.addEventListener("input", ()=>{
+        const match = findCityByName(editDistrictIdInput.value, editCityInput.value);
+        editCityIdInput.value = match ? koombiyoCityId(match) : "";
       });
 
       document.getElementById("saveEditOrd").addEventListener("click", ()=>{
+        if(!editDistrictIdInput.value){ toast("Pick a district from the suggestions list."); return; }
+        if(!editCityIdInput.value){ toast("Pick a city from the suggestions list."); return; }
         o.date = document.getElementById("editOrdDate").value || o.date;
         o.orderNo = document.getElementById("editOrdNo").value.trim();
         if(!synced) o.waybillId = document.getElementById("editOrdWaybill").value.trim();
         o.deliveryCharge = Number(document.getElementById("editOrdDelivery").value) || 0;
         o.discount = Math.max(0, Number(document.getElementById("editOrdDiscount").value) || 0);
         if(!synced) o.bankDeposit = !!document.getElementById("editOrdBankDeposit").checked;
-        const distId = document.getElementById("editOrdDistrict").value;
-        const cityId = document.getElementById("editOrdCity").value;
+        const distId = editDistrictIdInput.value;
+        const cityId = editCityIdInput.value;
         const districtObj = (state.settings.koombiyo.districts||[]).find(d=>koombiyoDistrictId(d)===distId);
         const cityList = ((state.settings.koombiyo.cities||{})[distId]||{}).list || [];
         const cityObj = cityList.find(c=>koombiyoCityId(c)===cityId);
