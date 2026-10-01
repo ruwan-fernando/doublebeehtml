@@ -3982,10 +3982,17 @@ function openLogCompletionModal(preselectedTailorId = ""){
   const tbody = document.getElementById("compItemsTbody");
   const readout = document.getElementById("compSummaryReadout");
 
+  // Assignment sets grouped by category+colour for the currently selected tailor, each list
+  // sorted oldest-first. A tailor can be assigned the same bag/colour multiple times (e.g. 10
+  // today, 20 next week) — completions must always drain the earliest assigned set before
+  // spilling into the next one, so this is the single source of truth both the live preview
+  // and the submit handler read from.
+  let currentGroups = {};
+
   const renderActiveItems = ()=>{
     const tId = tailorSel.value;
     const assigns = (state.assignments||[]).filter(a => a.tailorId === tId && (Number(a.assignedQty)||0) > (Number(a.completedQty)||0));
-    
+
     if(!assigns.length){
       tbody.innerHTML = `
         <tr class="empty-row">
@@ -4005,18 +4012,43 @@ function openLogCompletionModal(preselectedTailorId = ""){
       return;
     }
 
-    tbody.innerHTML = assigns.map(a => {
-      const cat = (state.categories||[]).find(c => c.id === a.categoryId);
-      const assigned = Number(a.assignedQty)||0;
-      const completed = Number(a.completedQty)||0;
+    // Group the tailor's open assignments by category+colour. Each group is one FIFO queue:
+    // oldest assigned set first, newer sets only get touched once older ones are fully done.
+    const groups = {};
+    assigns.forEach(a => {
+      const key = a.categoryId + "::" + (a.color||'');
+      (groups[key] = groups[key] || []).push(a);
+    });
+    Object.values(groups).forEach(list => {
+      list.sort((x,y) => (x.date||'').localeCompare(y.date||'') || (x.createdAt||'').localeCompare(y.createdAt||''));
+    });
+    currentGroups = groups;
+
+    const groupKeys = Object.keys(groups).sort((k1,k2) => {
+      const d1 = groups[k1][0], d2 = groups[k2][0];
+      return (d1.date||'').localeCompare(d2.date||'') || (d1.createdAt||'').localeCompare(d2.createdAt||'');
+    });
+
+    tbody.innerHTML = groupKeys.map(key => {
+      const list = groups[key];
+      const first = list[0];
+      const cat = (state.categories||[]).find(c => c.id === first.categoryId);
+      const assigned = list.reduce((s,a)=> s + (Number(a.assignedQty)||0), 0);
+      const completed = list.reduce((s,a)=> s + (Number(a.completedQty)||0), 0);
       const remaining = Math.max(0, assigned - completed);
-      const rate = Number(a.rate)||0;
+      const rates = [...new Set(list.map(a => Number(a.rate)||0))];
+      const rateLabel = rates.length === 1 ? fmt(rates[0]) : 'Varies';
+      const rateTitle = list.map((a,i) => {
+        const rem = Math.max(0, (Number(a.assignedQty)||0) - (Number(a.completedQty)||0));
+        return `Set ${i+1} (assigned ${a.date||'—'}): ${rem} remaining @ ${fmt(Number(a.rate)||0)}/bag`;
+      }).join('\n');
 
       return `
-        <tr class="comp-item-row" data-assign-id="${a.id}" data-rate="${rate}" data-max="${remaining}">
+        <tr class="comp-item-row" data-group-key="${esc(key)}" data-max="${remaining}">
           <td>
             <div style="font-weight:600;color:var(--text);">${cat ? esc(cat.name) : '—'}</div>
-            ${a.color ? `<span class="pill" style="font-size:10.5px;padding:1px 7px;margin-top:2px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);display:inline-block;font-weight:500;">${esc(a.color)}</span>` : ''}
+            ${first.color ? `<span class="pill" style="font-size:10.5px;padding:1px 7px;margin-top:2px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);display:inline-block;font-weight:500;">${esc(first.color)}</span>` : ''}
+            ${list.length > 1 ? `<div style="font-size:10px;color:var(--text-faint);margin-top:3px;" title="${esc(rateTitle)}">${list.length} sets queued (oldest first)</div>` : ''}
           </td>
           <td class="num">${assigned}</td>
           <td class="num" style="color:var(--good);">${completed}</td>
@@ -4027,8 +4059,9 @@ function openLogCompletionModal(preselectedTailorId = ""){
                 style="width:65px;background:var(--bg-raised);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:3px 6px;font-size:13px;text-align:right;">
               <button type="button" class="btn btn-sm btn-ghost row-btn-all" style="padding:2px 6px;font-size:10px;" title="Fill all remaining">All</button>
             </div>
+            <div class="row-fifo-breakdown" style="font-size:10px;color:var(--text-faint);margin-top:3px;text-align:right;"></div>
           </td>
-          <td class="num">${fmt(rate)}</td>
+          <td class="num" title="${esc(rateTitle)}">${rateLabel}</td>
           <td class="num row-earned-val" style="font-weight:600;color:var(--good);">${fmt(0)}</td>
         </tr>
       `;
@@ -4038,13 +4071,34 @@ function openLogCompletionModal(preselectedTailorId = ""){
       const inp = tr.querySelector(".row-comp-now");
       const btnAll = tr.querySelector(".row-btn-all");
       const max = Number(tr.dataset.max)||0;
-      const rate = Number(tr.dataset.rate)||0;
+      const list = currentGroups[tr.dataset.groupKey] || [];
       const earnedSpan = tr.querySelector(".row-earned-val");
+      const breakdownDiv = tr.querySelector(".row-fifo-breakdown");
 
       const updateRow = ()=>{
         let val = Math.max(0, Math.min(Number(inp.value)||0, max));
         inp.value = val;
-        earnedSpan.textContent = fmt(val * rate);
+
+        // Same FIFO walk used on submit: drain the oldest set first, only spill into the
+        // next one once the current set's remaining qty is used up.
+        let left = val;
+        let earned = 0;
+        const parts = [];
+        for(const a of list){
+          if(left <= 0) break;
+          const avail = Math.max(0, (Number(a.assignedQty)||0) - (Number(a.completedQty)||0));
+          if(avail <= 0) continue;
+          const take = Math.min(avail, left);
+          if(take > 0){
+            earned += take * (Number(a.rate)||0);
+            parts.push(take);
+            left -= take;
+          }
+        }
+        earnedSpan.textContent = fmt(earned);
+        breakdownDiv.textContent = parts.length > 1
+          ? parts.map((n,i) => `Set ${i+1}: ${n}`).join(' · ')
+          : '';
         updateSummary();
       };
 
@@ -4079,23 +4133,38 @@ function openLogCompletionModal(preselectedTailorId = ""){
     const tailorId = tailorSel.value;
     const date = document.getElementById("compDate").value || todayStr();
     const notes = (document.getElementById("compNotes").value||"").trim();
-    const rows = Array.from(tbody.querySelectorAll(".comp-item-row"));
+    const groupRows = Array.from(tbody.querySelectorAll(".comp-item-row"));
 
-    // Pass 1 — validate every row against current stock, accounting for what earlier rows in
-    // this same batch already reserved (so two rows drawing from the same material+colour can't
-    // both individually pass a check that they'd jointly fail). Nothing is mutated in this pass —
-    // if any row fails, we abort before touching state at all (requirement: don't deduct any
-    // stock if the whole production transaction can't be completed).
+    // Expand each grouped row's entered quantity into per-assignment splits, oldest assigned
+    // set first. This is the actual FIFO log: a set must be fully completed before any of the
+    // entered quantity spills into the next set assigned for the same category/colour.
+    const splitEntries = [];
+    for(const tr of groupRows){
+      const qty = Number(tr.querySelector(".row-comp-now")?.value)||0;
+      if(qty <= 0) continue;
+      const list = currentGroups[tr.dataset.groupKey] || [];
+      let left = qty;
+      for(const assign of list){
+        if(left <= 0) break;
+        const avail = Math.max(0, (Number(assign.assignedQty)||0) - (Number(assign.completedQty)||0));
+        if(avail <= 0) continue;
+        const take = Math.min(avail, left);
+        if(take > 0){
+          splitEntries.push({ assign, qty: take, rate: Number(assign.rate)||0 });
+          left -= take;
+        }
+      }
+    }
+
+    // Pass 1 — validate every split against current stock, accounting for what earlier splits
+    // in this same batch already reserved (so two splits drawing from the same material+colour
+    // can't both individually pass a check that they'd jointly fail). Nothing is mutated in this
+    // pass — if any split fails, we abort before touching state at all (requirement: don't
+    // deduct any stock if the whole production transaction can't be completed).
     const reserved = {};
     const keyFor = (materialId, color) => materialId + "::" + (color||'');
     const validatedRows = [];
-    for(const tr of rows){
-      const qty = Number(tr.querySelector(".row-comp-now").value)||0;
-      if(qty <= 0) continue;
-      const assignId = tr.dataset.assignId;
-      const rate = Number(tr.dataset.rate)||0;
-      const assign = (state.assignments||[]).find(a => a.id === assignId);
-      if(!assign) continue;
+    for(const { assign, qty, rate } of splitEntries){
       const cat = (state.categories||[]).find(c => c.id === assign.categoryId);
       const recipe = getCategoryColorRecipe(cat, assign.color);
 
@@ -6490,4 +6559,3 @@ function handleSignOut(){
 </script>
 </body>
 </html>
-
