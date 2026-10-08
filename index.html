@@ -148,7 +148,8 @@
   .empty-row td{ text-align:center; color: var(--text-faint); padding: 26px 12px; }
   tr.row-unsynced{ background: var(--bad-bg); }
   tr.row-synced{ background: var(--good-bg); }
-  tr.row-unsynced:hover, tr.row-synced:hover{ filter: brightness(0.97); }
+  tr.row-manual{ background: var(--surface-2); }
+  tr.row-unsynced:hover, tr.row-synced:hover, tr.row-manual:hover{ filter: brightness(0.97); }
 
   /* ---------- Misc ---------- */
   .two-col{ display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
@@ -462,6 +463,7 @@ function defaultState(){
     materials: [],
     materialBatches: [],
     stockAdjustments: [],
+    damagedBags: [],
     colors: ["Black", "Red", "Brown", "Blue", "Green", "White", "Navy", "Tan", "Maroon", "Beige", "Yellow", "Olive"],
     settings: {
       defaultDelivery: 500,
@@ -538,6 +540,7 @@ function migrateState(st){
   if(!st.materials) st.materials = [];
   if(!st.materialBatches) st.materialBatches = [];
   if(!st.stockAdjustments) st.stockAdjustments = [];
+  if(!st.damagedBags) st.damagedBags = [];
   
   // Add recipe and source fields to categories without them
   (st.categories||[]).forEach(c => {
@@ -846,7 +849,7 @@ async function ensureCitiesLoaded(districtId, force){
 async function syncOrders(ids){
   const targets = ids
     .map(id=> state.orders.find(o=>o.id===id))
-    .filter(o=> o && !(o.koombiyo && o.koombiyo.synced));
+    .filter(o=> o && !o.manualDelivery && !(o.koombiyo && o.koombiyo.synced));
   if(!targets.length){ toast("Nothing eligible to sync."); return; }
 
   const results = [];
@@ -994,9 +997,9 @@ function stopCourierStatusPolling(){
 // Tailor-made stock is colour-specific (selling 3 Black bags checks Black stock, not the
 // category's combined total across every colour); imported stock has no colour data and stays
 // category-level.
-function computeDraftStockWarnings(){
+function computeDraftStockWarnings(items = orderDraftItems){
   const byKey = {};
-  orderDraftItems.forEach(it=>{
+  items.forEach(it=>{
     const key = it.categoryId + "::" + (it.color||'');
     byKey[key] = (byKey[key]||0) + (Number(it.qty)||0);
   });
@@ -1070,7 +1073,7 @@ function updateOrderFormReadout(){
 
 function updateSyncSelectionUI(){
   const all = state.orders;
-  const eligibleForSync = all.filter(o=> !(o.koombiyo && o.koombiyo.synced));
+  const eligibleForSync = all.filter(o=> !o.manualDelivery && !(o.koombiyo && o.koombiyo.synced));
   const selectedEligibleCount = Array.from(selectedOrderIds).filter(id=> eligibleForSync.some(o=>o.id===id)).length;
   const btn = document.getElementById("btnSyncSelected");
   if(btn){ btn.textContent = `Sync Selected (${selectedEligibleCount})`; btn.disabled = selectedEligibleCount===0; }
@@ -1505,6 +1508,7 @@ function isExcludedFromProfit(o){
 
 // Human-readable status shown in the orders table / dashboards.
 function orderDisplayStatus(o){
+  if(o.manualDelivery) return "Manual Delivery";
   if(o.courierStatus && o.courierStatus.status) return o.courierStatus.status;
   if(o.koombiyo && o.koombiyo.synced) return "Awaiting status";
   return "Not synced";
@@ -2499,7 +2503,10 @@ function renderOrders(){
   const k = state.settings.koombiyo;
   return `
     <div class="card form-card">
-      <h3 style="margin-bottom:14px;font-size:15px;">Log an order</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:15px;">Log an order</h3>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnOpenManualDelivery">${iconPlus()} Add Manual Delivery</button>
+      </div>
       <form id="orderForm">
         <div class="section-title" style="margin-top:0;">Order Details</div>
         <div class="form-grid">
@@ -2627,6 +2634,217 @@ function findCityByName(districtId, name){
   return list.find(c=> koombiyoCityName(c).toLowerCase()===q) || null;
 }
 
+// "Add Manual Delivery" — for orders the business hand-delivers itself instead of shipping
+// through Koombiyo. No waybill/district/city (there's no courier to hand those to) and no
+// delivery charge (nothing passed through to a courier). Everything else — stock warnings,
+// selling price, profit — reuses the exact same math as a normal courier order, since those are
+// derived from the order's items/discount and don't care how it gets delivered.
+function openManualDeliveryModal(){
+  if(!state.categories.length){ toast("Add at least one bag category first."); return; }
+
+  let manualDraftItems = [];
+
+  showModal(`
+    <h3 style="margin-bottom:6px;">${iconCheckCircle()} Add Manual Delivery</h3>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:14px;">
+      Log an order you're delivering yourself. No delivery charge is added and it's never sent to the courier service.
+    </p>
+
+    <div class="section-title" style="margin-top:0;">Order Details</div>
+    <div class="form-grid">
+      <div class="field"><label>Order date</label><input id="mdDate" type="date" value="${todayStr()}" required></div>
+      <div class="field"><label>Order number</label><input id="mdOrderNo" placeholder="e.g. 1000" value="${esc(nextOrderNo())}"></div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div style="display:flex;align-items:center;gap:8px;padding-top:9px;">
+          <input type="checkbox" id="mdBankDeposit" style="width:auto;">
+          <label for="mdBankDeposit" style="margin:0;cursor:pointer;font-size:12.5px;font-weight:normal;" title="Customer already paid — nothing left to collect on delivery. Order value still counts for profit.">Already paid (nothing to collect)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Bag Details</div>
+    <div class="form-grid">
+      <div class="field"><label>Bag category</label>
+        <select id="mdBagCategorySelect">
+          <option value="">Select…</option>
+          ${state.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>Colour</label>
+        <select id="mdBagColorSelect">${getAllColors().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Quantity</label><input id="mdBagQtyInput" type="number" min="1" value="1"></div>
+      <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-primary" id="btnMdAddBagItem">${iconPlus()} Add Bag</button></div>
+    </div>
+    <div id="mdDraftItemsBox" style="margin-top:10px;"></div>
+    <div id="mdStockWarning" style="display:none;background:var(--bad-bg);color:var(--bad);padding:10px;border-radius:var(--radius-sm);margin-top:10px;font-size:12.5px;"></div>
+
+    <div class="section-title">Pricing</div>
+    <div class="form-grid">
+      <div class="field"><label>Discount amount (${CURRENCY})</label><input id="mdDiscountInput" type="number" step="0.01" min="0" value="0" placeholder="0.00"></div>
+      <div class="field"><label>Total selling price</label><div class="readout" id="mdSelling">${CURRENCY} 0.00</div></div>
+      <div class="field"><label>Amount to collect</label><div class="readout" id="mdCollect">${CURRENCY} 0.00</div></div>
+      <div class="field"><label>Total order profit</label><div class="readout" id="mdProfit">${CURRENCY} 0.00</div></div>
+    </div>
+
+    <div class="form-grid" style="margin-top:12px;">
+      <div class="field"><label>Package description</label><input id="mdDescriptionInput" placeholder="Auto-filled from bag items"></div>
+      <div class="field"><label>Special note</label><input id="mdSpclNote" placeholder="Optional"></div>
+    </div>
+
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSubmitManualDelivery">${iconCheckCircle()} Confirm &amp; Add Manual Delivery</button>
+    </div>
+  `, "modal-lg");
+
+  const renderDraftItems = ()=>{
+    const box = document.getElementById("mdDraftItemsBox");
+    if(!manualDraftItems.length){
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--text-faint);">No bags added yet — add at least one above.</div>`;
+      return;
+    }
+    const totalQty = manualDraftItems.reduce((s,it)=> s + (Number(it.qty)||0), 0);
+    box.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bag Category</th><th>Colour</th><th class="num">Qty</th><th></th></tr></thead>
+          <tbody>
+            ${manualDraftItems.map(it=>{
+              const cat = state.categories.find(c=>c.id===it.categoryId);
+              return `<tr>
+                <td class="strong">${cat?esc(cat.name):'<span style="color:var(--bad)">Deleted category</span>'}</td>
+                <td>${esc(it.color||'—')}</td>
+                <td class="num">${it.qty}</td>
+                <td><button type="button" class="icon-btn" data-md-remove-item="${it.id}">${iconTrash()}</button></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:12px;color:var(--text-faint);margin-top:6px;">${manualDraftItems.length} bag type${manualDraftItems.length===1?'':'s'} · ${totalQty} bags total</div>
+    `;
+    box.querySelectorAll("[data-md-remove-item]").forEach(b=> b.addEventListener("click", ()=>{
+      manualDraftItems = manualDraftItems.filter(it=>it.id!==b.dataset.mdRemoveItem);
+      renderDraftItems();
+      updateReadout();
+    }));
+  };
+
+  const updateStockWarning = ()=>{
+    const warning = document.getElementById("mdStockWarning");
+    const problems = computeDraftStockWarnings(manualDraftItems);
+    if(problems.length){
+      warning.textContent = `⚠ Insufficient stock — ${problems.join("; ")}`;
+      warning.style.display = 'block';
+    } else {
+      warning.style.display = 'none';
+    }
+  };
+
+  const updateReadout = ()=>{
+    const discount = Math.max(0, Number(document.getElementById("mdDiscountInput").value)||0);
+    const grossSelling = manualDraftItems.reduce((s,it)=>{
+      const cat = state.categories.find(c=>c.id===it.categoryId);
+      return s + (Number(it.qty)||0) * Number(cat?.price||0);
+    }, 0);
+    const totalCost = manualDraftItems.reduce((s,it)=>{
+      const cat = state.categories.find(c=>c.id===it.categoryId);
+      return s + (Number(it.qty)||0) * Number(cat?.cost||0);
+    }, 0);
+    const totalSelling = grossSelling - discount;
+    const totalProfit = totalSelling - totalCost;
+    const alreadyPaid = document.getElementById("mdBankDeposit").checked;
+    document.getElementById("mdSelling").textContent = fmt(totalSelling);
+    document.getElementById("mdCollect").textContent = fmt(alreadyPaid ? 0 : totalSelling);
+    const profitEl = document.getElementById("mdProfit");
+    profitEl.textContent = fmt(totalProfit);
+    profitEl.style.color = totalProfit>=0 ? "var(--good)" : "var(--bad)";
+
+    const descInput = document.getElementById("mdDescriptionInput");
+    if(descInput && !descInput.dataset.userEdited){
+      descInput.value = manualDraftItems.map(it=>{
+        const cat = state.categories.find(c=>c.id===it.categoryId);
+        return `${it.qty}x ${cat?cat.name:'bag'}${it.color?` (${it.color})`:''}`;
+      }).join(", ");
+    }
+    updateStockWarning();
+  };
+
+  renderDraftItems();
+  updateReadout();
+
+  document.getElementById("mdDescriptionInput").addEventListener("input", (e)=>{ e.target.dataset.userEdited = "1"; });
+  document.getElementById("mdDiscountInput").addEventListener("input", updateReadout);
+  document.getElementById("mdBankDeposit").addEventListener("input", updateReadout);
+
+  document.getElementById("mdBagCategorySelect").addEventListener("change", ()=>{
+    const cat = state.categories.find(c=>c.id===document.getElementById("mdBagCategorySelect").value);
+    const colorSel = document.getElementById("mdBagColorSelect");
+    const catColors = getCategoryColors(cat);
+    if(catColors.length && colorSel && !catColors.includes(colorSel.value)) colorSel.value = catColors[0];
+  });
+
+  document.getElementById("btnMdAddBagItem").addEventListener("click", ()=>{
+    const catId = document.getElementById("mdBagCategorySelect").value;
+    const color = document.getElementById("mdBagColorSelect").value;
+    const qty = Number(document.getElementById("mdBagQtyInput").value)||0;
+    if(!catId){ toast("Select a bag category first"); return; }
+    if(qty<=0){ toast("Enter a quantity greater than 0"); return; }
+    manualDraftItems.push({ id: uid(), categoryId: catId, color, qty });
+    renderDraftItems();
+    updateReadout();
+    document.getElementById("mdBagQtyInput").value = 1;
+  });
+
+  document.getElementById("btnSubmitManualDelivery").addEventListener("click", ()=>{
+    const date = document.getElementById("mdDate").value || todayStr();
+    if(!manualDraftItems.length){ toast("Add at least one bag before submitting."); return; }
+
+    // Insufficient stock is a warning, not a block — same rule the courier order form uses,
+    // since some bags get made-to-order or sourced after the sale is logged.
+    const problems = computeDraftStockWarnings(manualDraftItems);
+
+    const items = manualDraftItems.map(it=>{
+      const cat = state.categories.find(c=>c.id===it.categoryId);
+      return { id: it.id, categoryId: it.categoryId, color: it.color||null, qty: Number(it.qty)||0, source: cat?.source || 'imported' };
+    });
+
+    state.orders.push({
+      id: uid(),
+      date,
+      orderNo: document.getElementById("mdOrderNo").value.trim(),
+      waybillId: "",
+      items,
+      deliveryCharge: 0,
+      discount: Math.max(0, Number(document.getElementById("mdDiscountInput").value)||0),
+      bankDeposit: document.getElementById("mdBankDeposit").checked,
+      manualDelivery: true,
+      customer: {
+        name: "",
+        phone: "",
+        address: "",
+        district: "",
+        city: "",
+        districtName: "",
+        cityName: "",
+      },
+      description: document.getElementById("mdDescriptionInput").value.trim(),
+      spclNote: document.getElementById("mdSpclNote").value.trim(),
+      koombiyo: { synced:false, syncedAt:null, lastError:null, lastAttemptAt:null },
+      courierStatus: null,
+      courierStatusHistory: [],
+      courierStatusFetchedAt: null,
+    });
+
+    saveState();
+    closeModal();
+    toast(problems.length ? `Manual delivery logged — insufficient stock for ${problems[0]}` : "Manual delivery logged");
+    render();
+  });
+}
+
 // Matches the Logged Orders search box against waybill ID, customer name and phone number.
 function orderMatchesSearch(o, q){
   if(!q) return true;
@@ -2642,7 +2860,7 @@ function renderOrdersLogSection(){
   const totalOrders = all.length;
   const { pageItems: pageRows, totalPages } = paginate(all, orderPage);
 
-  const eligibleForSync = all.filter(o=> !(o.koombiyo && o.koombiyo.synced));
+  const eligibleForSync = all.filter(o=> !o.manualDelivery && !(o.koombiyo && o.koombiyo.synced));
   const selectedEligibleCount = Array.from(selectedOrderIds).filter(id=> eligibleForSync.some(o=>o.id===id)).length;
   const allSyncedOrders = state.orders.filter(o=> o.koombiyo && o.koombiyo.synced);
   const selectedSyncedIds = Array.from(selectedOrderIds).filter(id=> allSyncedOrders.some(o=>o.id===id));
@@ -2689,9 +2907,9 @@ function renderOrdersLogSection(){
             const statusText = orderDisplayStatus(o);
             const synced = !!(o.koombiyo && o.koombiyo.synced);
             const hasHistory = !!(o.courierStatusHistory && o.courierStatusHistory.length);
-            return `<tr data-order-row="${o.id}" class="${synced ? 'row-synced' : 'row-unsynced'}">
+            return `<tr data-order-row="${o.id}" class="${o.manualDelivery ? 'row-manual' : (synced ? 'row-synced' : 'row-unsynced')}">
               <td><input type="checkbox" data-select-order="${o.id}" ${selectedOrderIds.has(o.id)?'checked':''}></td>
-              <td class="strong">${esc(o.waybillId||'—')}</td>
+              <td class="strong">${o.manualDelivery ? '<span class="pill" style="background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border);">Manual</span>' : esc(o.waybillId||'—')}</td>
               <td>${esc(o.orderNo||'—')}</td>
               <td>${esc(o.date||'')}</td>
               <td>${esc(o.customer&&o.customer.name||'—')}${o.bankDeposit ? ' <span class="pill good" style="font-size:9.5px;padding:1px 6px;">Bank deposit</span>' : ''}<div style="font-size:11px;color:var(--text-faint);">${esc(o.customer&&o.customer.phone||'')}</div><div style="font-size:11px;color:var(--text-faint);">${esc(o.customer&&o.customer.cityName||'')}${o.customer&&o.customer.cityName&&o.customer.districtName?', ':''}${esc(o.customer&&o.customer.districtName||'')}</div></td>
@@ -2704,7 +2922,7 @@ function renderOrdersLogSection(){
                 ${synced ? `<div style="font-size:10.5px;color:var(--text-faint);margin-top:3px;">Synced ${o.koombiyo.syncedAt?new Date(o.koombiyo.syncedAt).toLocaleDateString():''}</div>` : (o.koombiyo && o.koombiyo.lastError ? `<div style="font-size:10.5px;color:var(--bad);margin-top:3px;">${esc(o.koombiyo.lastError)}</div>` : '')}
               </td>
               <td><div class="row-actions">
-                ${synced ? `<button class="icon-btn" data-refresh-status="${o.id}" title="Refresh status">${iconHistory()}</button>` : `<button class="icon-btn" data-sync-order="${o.id}" title="Sync now">${iconCheckCircle()}</button>`}
+                ${o.manualDelivery ? '' : (synced ? `<button class="icon-btn" data-refresh-status="${o.id}" title="Refresh status">${iconHistory()}</button>` : `<button class="icon-btn" data-sync-order="${o.id}" title="Sync now">${iconCheckCircle()}</button>`)}
                 ${synced ? `<button class="icon-btn" data-print-label="${o.id}" title="Print shipping label">${iconPrinter()}</button>` : ''}
                 <button class="icon-btn" data-edit-order="${o.id}">${iconEdit()}</button>
                 <button class="icon-btn" data-del-order="${o.id}">${iconTrash()}</button>
@@ -2840,9 +3058,173 @@ function renderReturns(){
       <div id="returnReceiveResults">${renderReturnReceiveResults()}</div>
     </div>
 
+    ${renderDamagedBagsSection()}
     ${renderReturnImpactSummary()}
     ${renderCollectedReturnsSection()}
   `;
+}
+
+function renderDamagedBagsSection(){
+  const rows = [...(state.damagedBags||[])].sort((a,b)=> (b.date||"").localeCompare(a.date||"") || (b.createdAt||"").localeCompare(a.createdAt||""));
+  const totalQty = rows.reduce((s,r)=> s + (Number(r.qty)||0), 0);
+  const totalLoss = rows.reduce((s,r)=> s + (Number(r.totalCost)||0), 0);
+  return `
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <h3 style="margin:0;font-size:15px;">Damaged Bags</h3>
+        <button type="button" class="btn btn-primary btn-sm" id="btnOpenDamagedBags">${iconPlus()} Add Damaged Bags</button>
+      </div>
+      <p style="color:var(--text-dim);font-size:12.5px;margin:0 0 14px;">Bags written off as damaged — removed from stock and logged as a loss against profit.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Bag Category &amp; Colour</th><th class="num">Qty</th><th class="num">Cost/Bag</th><th class="num">Total Loss</th><th>Notes</th><th></th></tr></thead>
+          <tbody>
+            ${rows.length ? rows.map(r=>{
+              const cat = state.categories.find(c=>c.id===r.categoryId);
+              return `<tr>
+                <td>${esc(r.date||'')}</td>
+                <td>
+                  <div style="font-weight:600;color:var(--text);">${cat ? esc(cat.name) : '<span style="color:var(--bad)">Deleted category</span>'}</div>
+                  ${r.color ? `<span class="pill" style="font-size:10.5px;padding:1px 7px;margin-top:2px;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-soft);display:inline-block;font-weight:500;">${esc(r.color)}</span>` : ''}
+                </td>
+                <td class="num">${r.qty}</td>
+                <td class="num">${fmt(r.costPerBag)}</td>
+                <td class="num" style="color:var(--bad);font-weight:600;">${fmt(r.totalCost)}</td>
+                <td style="color:var(--text-dim);font-size:12.5px;">${esc(r.notes||'—')}</td>
+                <td><button class="icon-btn" data-del-damaged="${r.id}" title="Delete entry">${iconTrash()}</button></td>
+              </tr>`;
+            }).join("") : `<tr class="empty-row"><td colspan="7">No damaged bags logged yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      ${rows.length ? `<div style="font-size:12px;color:var(--text-faint);margin-top:8px;">${rows.length} entr${rows.length===1?'y':'ies'} · ${totalQty} bag${totalQty===1?'':'s'} · ${fmt(totalLoss)} total loss</div>` : ''}
+    </div>
+  `;
+}
+
+// Marking bags damaged pulls them straight out of stock (via a stockAdjustments "remove" entry
+// — the same mechanism the Inventory screen's manual adjustment uses) and books their cost as a
+// loss (via a state.expenses entry — the same bucket Finance/Dashboard/Reports already subtract
+// from profit). Reusing both existing pipelines means this needs no new profit/stock math.
+function openAddDamagedBagsModal(){
+  if(!state.categories.length){ toast("Add at least one bag category first."); return; }
+
+  showModal(`
+    <h3 style="margin-bottom:6px;">Add Damaged Bags</h3>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:14px;">This removes the bags from stock and logs their cost as a loss against profit.</p>
+
+    <div class="field" style="margin-bottom:10px;"><label>Date</label><input id="dmgDate" type="date" value="${todayStr()}" required></div>
+    <div class="field" style="margin-bottom:10px;"><label>Bag category</label>
+      <select id="dmgCategorySelect" required>
+        <option value="">Select…</option>
+        ${state.categories.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field" style="margin-bottom:10px;"><label>Colour</label>
+      <select id="dmgColorSelect"><option value="">Select a category first</option></select>
+    </div>
+    <div class="field" style="margin-bottom:10px;"><label>Quantity damaged</label><input id="dmgQty" type="number" min="1" step="1" value="1" required></div>
+    <div id="dmgStockInfo" style="font-size:12px;color:var(--text-faint);margin-bottom:10px;"></div>
+    <div class="field" style="margin-bottom:16px;"><label>Notes (optional)</label><input id="dmgNotes" placeholder="e.g. Torn during stitching"></div>
+
+    <div style="font-size:13px;font-weight:700;color:var(--bad);margin-bottom:4px;" id="dmgLossReadout">Loss to be deducted from profit: ${fmt(0)}</div>
+
+    <div class="form-actions" style="margin-top:14px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSubmitDamagedBags">${iconCheckCircle()} Confirm &amp; Add Damaged Bags</button>
+    </div>
+  `, "modal-md");
+
+  const catSel = document.getElementById("dmgCategorySelect");
+  const colorSel = document.getElementById("dmgColorSelect");
+  const qtyInp = document.getElementById("dmgQty");
+  const stockInfo = document.getElementById("dmgStockInfo");
+  const lossReadout = document.getElementById("dmgLossReadout");
+
+  const currentStock = ()=>{
+    const cat = state.categories.find(c=>c.id===catSel.value);
+    if(!cat) return { cat:null, available:0, source:'imported' };
+    const source = cat.source || 'imported';
+    const color = source === 'tailor' ? (colorSel.value || undefined) : undefined;
+    const stock = getCategoryTotalStock(cat.id, color);
+    const available = source === 'imported' ? stock.imported : stock.tailorMade;
+    return { cat, available, source };
+  };
+
+  const updateColorOptions = ()=>{
+    const cat = state.categories.find(c=>c.id===catSel.value);
+    if(!cat){ colorSel.innerHTML = `<option value="">Select a category first</option>`; return; }
+    const catColors = getCategoryColors(cat);
+    const opts = catColors.length ? catColors : getAllColors();
+    colorSel.innerHTML = opts.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  };
+
+  const updateReadout = ()=>{
+    const { cat, available } = currentStock();
+    const qty = Number(qtyInp.value)||0;
+    const cost = Number(cat?.cost||0);
+    stockInfo.textContent = cat ? `${available} currently in stock for this category/colour.` : '';
+    lossReadout.textContent = `Loss to be deducted from profit: ${fmt(cost * qty)}`;
+  };
+
+  updateColorOptions();
+  updateReadout();
+
+  catSel.addEventListener("change", ()=>{ updateColorOptions(); updateReadout(); });
+  colorSel.addEventListener("change", updateReadout);
+  qtyInp.addEventListener("input", updateReadout);
+
+  document.getElementById("btnSubmitDamagedBags").addEventListener("click", ()=>{
+    const date = document.getElementById("dmgDate").value || todayStr();
+    const qty = Number(qtyInp.value)||0;
+    const notes = document.getElementById("dmgNotes").value.trim();
+    const { cat, available, source } = currentStock();
+
+    if(!cat){ toast("Select a bag category."); return; }
+    if(qty <= 0){ toast("Enter a quantity greater than 0."); return; }
+    if(qty > available){ toast(`Cannot log ${qty} damaged bags — only ${available} currently in stock.`); return; }
+
+    const color = source === 'tailor' ? (colorSel.value || null) : null;
+    const costPerBag = Number(cat.cost||0);
+    const totalCost = costPerBag * qty;
+    const label = `${qty} x ${cat.name}${color?` (${color})`:''} — damaged`;
+
+    const expenseId = uid();
+    const adjustmentId = uid();
+
+    state.expenses.push({ id: expenseId, date, type: "Damaged Bags", desc: label, amount: totalCost });
+    state.stockAdjustments.push({
+      id: adjustmentId,
+      categoryId: cat.id,
+      source,
+      color: color || undefined,
+      type: 'remove',
+      qty: -qty,
+      date,
+      reason: `Damaged bags${notes ? ': ' + notes : ''}`,
+      createdAt: new Date().toISOString()
+    });
+
+    if(!Array.isArray(state.damagedBags)) state.damagedBags = [];
+    state.damagedBags.push({
+      id: uid(),
+      date,
+      categoryId: cat.id,
+      color,
+      qty,
+      costPerBag,
+      totalCost,
+      notes,
+      expenseId,
+      adjustmentId,
+      createdAt: new Date().toISOString()
+    });
+
+    saveState();
+    closeModal();
+    toast(`Logged ${qty} damaged bag(s) — ${fmt(totalCost)} written off`);
+    render();
+  });
 }
 
 /* ============================================================
@@ -5370,6 +5752,8 @@ function bindTabEvents(){
       });
     }
 
+    document.getElementById("btnOpenManualDelivery")?.addEventListener("click", ()=> openManualDeliveryModal());
+
     // --- Logged Orders: search/filter, selection, sync, status, edit/delete ---
     // (pagination itself is wired by the shared bindSharedPagers() call at the top of this function)
     let orderSearchDebounce = null;
@@ -5556,6 +5940,20 @@ function bindTabEvents(){
   }
 
   if(currentTab === "returns"){
+    // --- Damaged bags ---
+    document.getElementById("btnOpenDamagedBags")?.addEventListener("click", ()=> openAddDamagedBagsModal());
+    document.querySelectorAll("[data-del-damaged]").forEach(b=> b.addEventListener("click", ()=>{
+      const id = b.dataset.delDamaged;
+      const rec = (state.damagedBags||[]).find(r=>r.id===id);
+      if(!rec) return;
+      confirmDelete("This will restore the bags to stock and remove the loss from profit.", ()=>{
+        state.damagedBags = state.damagedBags.filter(r=>r.id!==id);
+        state.expenses = state.expenses.filter(e=>e.id!==rec.expenseId);
+        state.stockAdjustments = state.stockAdjustments.filter(a=>a.id!==rec.adjustmentId);
+        saveState(); toast("Damaged bags entry removed"); render();
+      });
+    }));
+
     // --- Collected Returns month filter ---
     document.getElementById("collectedReturnsMonthFilter")?.addEventListener("change", (e)=>{
       collectedReturnsFilter.month = e.target.value;
