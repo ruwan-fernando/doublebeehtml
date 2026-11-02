@@ -1110,6 +1110,12 @@ function getTailorCode(t, index){
   return idx >= 0 ? "T-" + String(idx + 1).padStart(3, "0") : "T-001";
 }
 
+// Newest record first (by date, then by creation time) — used by assignment & completion tables
+function sortNewestFirst(list){
+  return [...(list||[])].sort((x,y) =>
+    (y.date||'').localeCompare(x.date||'') || (y.createdAt||'').localeCompare(x.createdAt||''));
+}
+
 function getTailorStats(tailorId, monthFilter = "all"){
   const allAssigns = (state.assignments||[]).filter(a => a.tailorId === tailorId);
   const filteredAssigns = monthFilter && monthFilter !== "all" 
@@ -4006,8 +4012,8 @@ function renderTailors(){
   `).join("");
 
   const { pageItems: tailorsPageRows, totalPages: tailorsTotalPages } = paginate(filteredTailors, tailorsPage);
-  const { pageItems: completionsPageRows, totalPages: completionsTotalPages } = paginate(filteredCompletions, completionsPage);
-  const { pageItems: assignmentsPageRows, totalPages: assignmentsTotalPages } = paginate(filteredAssignments, assignmentsPage);
+  const { pageItems: completionsPageRows, totalPages: completionsTotalPages } = paginate(sortNewestFirst(filteredCompletions), completionsPage);
+  const { pageItems: assignmentsPageRows, totalPages: assignmentsTotalPages } = paginate(sortNewestFirst(filteredAssignments), assignmentsPage);
 
   return `
     <div class="card analytics-filter-card">
@@ -4272,6 +4278,7 @@ function renderTailors(){
                   <span class="progress-pill ${isDone ? 'done' : 'pending'}">${isDone ? 'Completed' : 'In Progress'}</span>
                 </td>
                 <td>
+                  <button class="icon-btn" data-edit-assign="${a.id}" title="Edit Assignment">${iconEdit()}</button>
                   <button class="icon-btn" data-del-assign="${a.id}" title="Delete Assignment">${iconTrash()}</button>
                 </td>
               </tr>
@@ -5282,7 +5289,7 @@ function openTailorHistoryModal(tailorId){
           </tr>
         </thead>
         <tbody>
-          ${(stats.allCompletions||[]).length ? stats.allCompletions.map(c => {
+          ${(stats.allCompletions||[]).length ? sortNewestFirst(stats.allCompletions).map(c => {
             const cat = state.categories.find(x => x.id === c.categoryId);
             return `
               <tr>
@@ -5323,7 +5330,7 @@ function openTailorHistoryModal(tailorId){
           </tr>
         </thead>
         <tbody>
-          ${stats.allAssigns.length ? stats.allAssigns.map(a => {
+          ${stats.allAssigns.length ? sortNewestFirst(stats.allAssigns).map(a => {
             const cat = state.categories.find(c => c.id === a.categoryId);
             const assigned = Number(a.assignedQty)||0;
             const done = Number(a.completedQty)||0;
@@ -5343,6 +5350,7 @@ function openTailorHistoryModal(tailorId){
                 <td class="num">${fmt(a.rate)}</td>
                 <td class="num" style="color:var(--good);font-weight:600;">${fmt(earned)}</td>
                 <td>
+                  <button class="icon-btn" data-edit-assign="${a.id}" title="Edit assignment">${iconEdit()}</button>
                   <button class="icon-btn" data-del-assign="${a.id}" title="Delete assignment">${iconTrash()}</button>
                 </td>
               </tr>
@@ -5399,6 +5407,10 @@ function openTailorHistoryModal(tailorId){
     });
   });
 
+  document.querySelectorAll("[data-edit-assign]").forEach(b => {
+    b.addEventListener("click", ()=> openEditAssignModal(b.dataset.editAssign, tailorId));
+  });
+
   document.querySelectorAll("[data-del-assign]").forEach(b => {
     b.addEventListener("click", ()=>{
       deleteAssignment(b.dataset.delAssign, tailorId);
@@ -5414,6 +5426,81 @@ function openTailorHistoryModal(tailorId){
         openTailorHistoryModal(tailorId);
       });
     });
+  });
+}
+
+function openEditAssignModal(assignId, refreshTailorId = null){
+  const a = (state.assignments||[]).find(x => x.id === assignId);
+  if(!a) return;
+  const tailor = (state.tailors||[]).find(t => t.id === a.tailorId);
+  const done = Number(a.completedQty)||0;
+  const hasDone = done > 0;
+  const catColors = (catId)=>{
+    const c = state.categories.find(x => x.id === catId);
+    const cols = getCategoryColors(c);
+    const list = cols.length ? cols : getAllColors();
+    return (a.color && !list.includes(a.color)) ? [a.color, ...list] : list;
+  };
+  const colorOpts = (catId, cur)=> catColors(catId).map(col => `<option value="${esc(col)}" ${col===cur?'selected':''}>${esc(col)}</option>`).join("");
+  const catOpts = state.categories.map(c => `<option value="${c.id}" ${c.id===a.categoryId?'selected':''}>${esc(c.name)}</option>`).join("");
+
+  showModal(`
+    <h3>Edit Bag Assignment <span class="tailor-badge-id">${esc(a.id)}</span></h3>
+    <p style="color:var(--text-dim);font-size:12.5px;margin-bottom:12px;">
+      Tailor: <strong>${tailor ? esc(tailor.name) : '—'}</strong> · Completed so far: <strong>${done}</strong>
+      ${hasDone ? '<br>Category and colour are locked because bags are already completed against this assignment.' : ''}
+    </p>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field"><label>Assignment Date *</label><input type="date" id="eaDate" value="${esc(a.date || todayStr())}"></div>
+      <div class="field"><label>Bag Category *</label><select id="eaCat" ${hasDone?'disabled':''}>${catOpts}</select></div>
+      <div class="field"><label>Colour *</label><select id="eaColor" ${hasDone?'disabled':''}>${colorOpts(a.categoryId, a.color)}</select></div>
+      <div class="field"><label>Assigned Qty * (min ${Math.max(1, done)})</label><input type="number" id="eaQty" min="${Math.max(1, done)}" value="${Number(a.assignedQty)||0}"></div>
+      <div class="field"><label>Rate / Bag (${CURRENCY}) *</label><input type="number" id="eaRate" step="0.01" min="0" value="${Number(a.rate)||0}"></div>
+    </div>
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btnSaveEditAssign">Save Changes</button>
+    </div>
+  `);
+
+  document.getElementById("eaCat").addEventListener("change", (e)=>{
+    const sel = document.getElementById("eaColor");
+    const cur = sel.value;
+    const opts = catColors(e.target.value);
+    sel.innerHTML = colorOpts(e.target.value, cur);
+    if(!opts.includes(cur) && opts.length) sel.value = opts[0];
+  });
+
+  document.getElementById("btnSaveEditAssign").addEventListener("click", ()=>{
+    const date = document.getElementById("eaDate").value || todayStr();
+    const qty = Number(document.getElementById("eaQty").value)||0;
+    const rate = Number(document.getElementById("eaRate").value)||0;
+    if(qty < 1){ toast("Quantity must be greater than zero."); return; }
+    if(qty < done){ toast(`Assigned qty cannot be less than the ${done} bag(s) already completed.`); return; }
+    if(rate < 0){ toast("Rate cannot be negative."); return; }
+
+    a.date = date;
+    a.month = date.slice(0,7);
+    a.year = date.slice(0,4);
+    if(!hasDone){
+      a.categoryId = document.getElementById("eaCat").value;
+      a.color = document.getElementById("eaColor").value;
+    }
+    a.assignedQty = qty;
+    // Keep already-logged completion records in step with the new rate so earnings match everywhere
+    if(Number(a.rate) !== rate){
+      (state.completions||[]).filter(c => c.assignmentId === a.id).forEach(c => {
+        c.rate = rate;
+        c.earnedAmount = (Number(c.qty)||0) * rate;
+      });
+    }
+    a.rate = rate;
+    a.updatedAt = new Date().toISOString();
+    saveState();
+    closeModal();
+    toast("Assignment updated");
+    if(refreshTailorId) openTailorHistoryModal(refreshTailorId);
+    else render();
   });
 }
 
@@ -6756,6 +6843,10 @@ function bindTabEvents(){
       b.addEventListener("click", ()=>{
         deleteCompletion(b.dataset.delCompletion);
       });
+    });
+
+    document.querySelectorAll("[data-edit-assign]").forEach(b => {
+      b.addEventListener("click", ()=> openEditAssignModal(b.dataset.editAssign));
     });
 
     document.querySelectorAll("[data-del-assign]").forEach(b => {
