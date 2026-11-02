@@ -4501,9 +4501,15 @@ function openLogCompletionModal(preselectedTailorId = ""){
     let totalWages = 0;
     tbody.querySelectorAll(".comp-item-row").forEach(tr => {
       const q = Number(tr.querySelector(".row-comp-now")?.value)||0;
-      const r = Number(tr.dataset.rate)||0;
       totalBags += q;
-      totalWages += q * r;
+      let left = q;
+      for(const a of (currentGroups[tr.dataset.groupKey] || [])){
+        if(left <= 0) break;
+        const avail = Math.max(0, (Number(a.assignedQty)||0) - (Number(a.completedQty)||0));
+        const take = Math.min(avail, left);
+        totalWages += take * (Number(a.rate)||0);
+        left -= take;
+      }
     });
     readout.textContent = `Logging ${totalBags} Bag${totalBags===1?'':'s'} · New Payment to Do: ${fmt(totalWages)}`;
   };
@@ -5393,6 +5399,12 @@ function openTailorHistoryModal(tailorId){
     });
   });
 
+  document.querySelectorAll("[data-del-assign]").forEach(b => {
+    b.addEventListener("click", ()=>{
+      deleteAssignment(b.dataset.delAssign, tailorId);
+    });
+  });
+
   document.querySelectorAll("[data-del-payment]").forEach(b => {
     b.addEventListener("click", ()=>{
       const pid = b.dataset.delPayment;
@@ -5402,6 +5414,26 @@ function openTailorHistoryModal(tailorId){
         openTailorHistoryModal(tailorId);
       });
     });
+  });
+}
+
+function deleteAssignment(assignId, refreshTailorId = null){
+  const a = (state.assignments||[]).find(x => x.id === assignId);
+  if(!a) return;
+  const linked = (state.completions||[]).filter(c => c.assignmentId === assignId);
+  const linkedQty = linked.reduce((s,c) => s + (Number(c.qty)||0), 0);
+  const msg = linked.length
+    ? `This assignment has ${linkedQty} completed bag(s) logged against it. Deleting it will also remove those completion records and restore the materials they consumed.`
+    : "This assignment record will be removed.";
+  confirmDelete(msg, ()=>{
+    // Remove linked completions first (restores materials) so no orphan records stay behind
+    linked.forEach(c => reverseMaterialConsumption(c.consumedBatches));
+    state.completions = (state.completions||[]).filter(c => c.assignmentId !== assignId);
+    state.assignments = (state.assignments||[]).filter(x => x.id !== assignId);
+    saveState();
+    toast("Assignment deleted");
+    if(refreshTailorId) openTailorHistoryModal(refreshTailorId);
+    else render();
   });
 }
 
@@ -6728,13 +6760,7 @@ function bindTabEvents(){
 
     document.querySelectorAll("[data-del-assign]").forEach(b => {
       b.addEventListener("click", ()=>{
-        const id = b.dataset.delAssign;
-        confirmDelete("This assignment record will be removed.", ()=>{
-          state.assignments = (state.assignments||[]).filter(a => a.id !== id);
-          saveState();
-          toast("Assignment deleted");
-          render();
-        });
+        deleteAssignment(b.dataset.delAssign);
       });
     });
   }
