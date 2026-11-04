@@ -651,7 +651,12 @@ function setSyncStatus(s){
   });
 }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+// Local calendar date (not UTC) — in Sri Lanka (UTC+5:30) toISOString() returns *yesterday* until 5:30am
+function localDateStr(d){
+  const x = d instanceof Date ? d : new Date(d);
+  return x.getFullYear() + "-" + String(x.getMonth()+1).padStart(2,"0") + "-" + String(x.getDate()).padStart(2,"0");
+}
+function todayStr(){ return localDateStr(new Date()); }
 function fmt(n){
   n = Number(n)||0;
   return CURRENCY + " " + n.toLocaleString("en-LK", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1528,14 +1533,19 @@ function isFinalCourierStatus(o){
   return FINAL_COURIER_STATUSES.includes(s);
 }
 
-// "Print All Synced Labels" only bulk-prints orders still in Processing (courier hasn't picked
-// up yet, or we haven't checked status yet) that were placed today — older or already-progressed
-// orders were presumably already labeled on their own day, so batch-reprinting them isn't wanted.
+// "Print All Synced Labels" bulk-prints today's synced orders (placed today or synced today) that
+// are still live — i.e. not delivered, returned or cancelled.
 function isProcessingToday(o){
   if(!(o.koombiyo && o.koombiyo.synced)) return false;
-  if(o.date !== todayStr()) return false;
-  const s = orderDisplayStatus(o).trim().toLowerCase();
-  return s === "processing" || s === "awaiting status";
+  // "Today" = order dated today, OR synced to the courier today (covers orders logged earlier
+  // or back-dated but synced today, and orders logged around midnight).
+  const today = todayStr();
+  const syncedToday = o.koombiyo.syncedAt && localDateStr(o.koombiyo.syncedAt) === today;
+  if(o.date !== today && !syncedToday) return false;
+  // Skip only orders that are finished/cancelled/returned — any in-progress courier status
+  // (Processing, Pending, Picked up, etc.) still gets a label.
+  if(o.manualDelivery || o.returnCollectedAt || isFinalCourierStatus(o) || isExcludedFromProfit(o)) return false;
+  return true;
 }
 
 function orderTotals(o){
@@ -2880,7 +2890,7 @@ function renderOrdersLogSection(){
         <button class="btn btn-ghost btn-sm" id="btnSyncSelected" ${selectedEligibleCount===0?'disabled':''}>Sync Selected (${selectedEligibleCount})</button>
         <button class="btn btn-primary btn-sm" id="btnSyncAll" ${eligibleForSync.length===0?'disabled':''}>Sync All (${eligibleForSync.length})</button>
         <button class="btn btn-ghost btn-sm" id="btnPrintSelectedLabels" ${selectedSyncedIds.length===0?'disabled':''}>${iconPrinter()} Print Selected (${selectedSyncedIds.length})</button>
-        <button class="btn btn-ghost btn-sm" id="btnPrintAllLabels" ${printAllOrders.length===0?'disabled':''} title="Only today's orders still in Processing">${iconPrinter()} Print All Synced Labels (${printAllOrders.length})</button>
+        <button class="btn btn-ghost btn-sm" id="btnPrintAllLabels" ${printAllOrders.length===0?'disabled':''} title="Today's synced orders that are not delivered/returned/cancelled">${iconPrinter()} Print All Synced Labels (${printAllOrders.length})</button>
       </div>
     </div>
 
@@ -4626,7 +4636,10 @@ function openLogCompletionModal(preselectedTailorId = ""){
     state.completions.push(...newCompletions);
     saveState();
     closeModal();
-    toast(`Successfully logged ${totalLogged} completed bag(s)! Materials consumed via FIFO.`);
+    const splitInfo = newCompletions.length > 1
+      ? " Split: " + newCompletions.map(c => `${c.assignmentId} ×${c.qty}`).join(", ") + " (oldest assignment first)."
+      : "";
+    toast(`Successfully logged ${totalLogged} completed bag(s)! Materials consumed via FIFO.${splitInfo}`);
     render();
   });
 }
